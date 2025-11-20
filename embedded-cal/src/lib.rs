@@ -29,9 +29,6 @@ pub trait HashProvider {
         self.update(&mut state, data);
         self.finalize(state)
     }
-
-    // Should we have convenience functions also that pack HashState with a &mut self? (And can we
-    // do that without default associated types? Probably, by providing a type in this crate.)
 }
 
 /// A hash algorithm identifier.
