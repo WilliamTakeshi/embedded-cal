@@ -214,26 +214,54 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
             dmatag: 32,
         };
 
-        let mut pad_desc = Descriptor {
-            addr: data.as_ptr() as *mut u8,
-            next: LAST_DESC_PTR,
-            sz: 0x2000_0000 | bytes_from_data as u32, // 63
-            dmatag: 35,
-        };
+        let mut in_desc = Descriptor::empty();
+        let mut block_desc = Descriptor::empty();
+        let mut state_desc = Descriptor::empty();
+        let mut data_desc = Descriptor::empty();
 
-        let mut data_desc = Descriptor {
-            addr: instance.block.as_ptr() as *mut u8,
-            next: &mut pad_desc,
-            sz: instance.block_bytes_used as u32,
-            dmatag: 3,
-        };
+        match instance.state {
+            None => {
+                // No state, so the input is formatted as
+                // in -> block -> data
+                in_desc.addr = header.as_ptr() as *mut u8;
+                in_desc.next = &mut block_desc;
+                in_desc.sz = sz(4);
+                in_desc.dmatag = 19;
 
-        let mut in_desc = Descriptor {
-            addr: header.as_ptr() as *mut u8,
-            next: &mut data_desc,
-            sz: sz(4),
-            dmatag: 19,
-        };
+                block_desc.addr = instance.block.as_ptr() as *mut u8;
+                block_desc.next = &mut data_desc;
+                block_desc.sz = instance.block_bytes_used as u32;
+                block_desc.dmatag = 3;
+
+                data_desc.addr = data.as_ptr() as *mut u8;
+                data_desc.next = LAST_DESC_PTR;
+                data_desc.sz = 0x2000_0000 | bytes_from_data as u32;
+                data_desc.dmatag = 35;
+            }
+            Some(state) => {
+                // With state, the input is formatted as
+                // in -> state -> data -> padding
+                in_desc.addr = header.as_ptr() as *mut u8;
+                in_desc.next = &mut state_desc;
+                in_desc.sz = sz(4);
+                in_desc.dmatag = 19;
+
+                state_desc.addr = state.as_ptr() as *mut u8;
+                state_desc.next = &mut block_desc;
+                state_desc.sz = sz(32);
+                state_desc.dmatag = 99;
+
+                block_desc.addr = instance.block.as_ptr() as *mut u8;
+                block_desc.next = &mut data_desc;
+                block_desc.sz = instance.block_bytes_used as u32;
+                block_desc.dmatag = 3;
+
+                data_desc.addr = data.as_ptr() as *mut u8;
+                data_desc.next = LAST_DESC_PTR;
+                data_desc.sz = 0x2000_0000 | bytes_from_data as u32;
+                data_desc.dmatag = 35;
+            }
+        }
 
         dma.fetchaddrlsb()
             .write(|w| unsafe { w.bits((&mut in_desc) as *mut _ as u32) });
