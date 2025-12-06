@@ -6,7 +6,7 @@ use defmt_rtt as _;
 use descriptor::{Descriptor, DescriptorChain, LAST_DESC_PTR};
 use panic_probe as _;
 
-const BLOCK_SIZE: usize = 64;
+const BLOCK_SIZE: usize = 128;
 
 pub struct Nrf54l15Cal {
     p: nrf54l15_app_pac::Peripherals,
@@ -216,12 +216,14 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
             });
         }
 
-        descriptors.push(Descriptor {
-            addr: instance.block.as_ptr() as *mut u8,
-            next: core::ptr::null_mut(),
-            sz: instance.block_bytes_used as u32,
-            dmatag: 3,
-        });
+        if instance.block_bytes_used > 0 {
+            descriptors.push(Descriptor {
+                addr: instance.block.as_ptr() as *mut u8,
+                next: core::ptr::null_mut(),
+                sz: instance.block_bytes_used as u32,
+                dmatag: 3,
+            });
+        }
 
         descriptors.push(Descriptor {
             addr: data.as_ptr() as *mut u8,
@@ -307,7 +309,7 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
             descriptors.push(Descriptor {
                 addr: state.as_ptr() as *mut u8,
                 next: core::ptr::null_mut(),
-                sz: sz(32),
+                sz: sz(algo_len),
                 dmatag: 99,
             });
         }
