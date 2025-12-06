@@ -40,19 +40,27 @@ impl Drop for Nrf54l15Cal {
 #[derive(PartialEq, Eq, Debug, Clone, Copy, defmt::Format)]
 pub enum HashAlgorithm {
     Sha256 = 0x08,
+    Sha384 = 0x10,
+    Sha512 = 0x20,
 }
 
 impl embedded_cal::HashAlgorithm for HashAlgorithm {
     fn len(&self) -> usize {
         match self {
             HashAlgorithm::Sha256 => 32,
+            HashAlgorithm::Sha384 => 48,
+            HashAlgorithm::Sha512 => 64,
         }
     }
 
-    // FIXME: See from_cose_number definition
+    // FIXME: I am using the values from RFC 9054 here, is that correct?
+    // https://www.rfc-editor.org/rfc/rfc9054.html#name-sha-2-hash-algorithms
     fn from_cose_number(number: impl Into<i128>) -> Option<Self> {
         match number.into() {
             -10 => Some(HashAlgorithm::Sha256),
+            // -16 => Some(HashAlgorithm::Sha256),
+            -43 => Some(HashAlgorithm::Sha384),
+            -44 => Some(HashAlgorithm::Sha512),
             _ => None,
         }
     }
@@ -60,6 +68,8 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
     fn from_ni_id(number: u8) -> Option<Self> {
         match number {
             1 => Some(HashAlgorithm::Sha256),
+            7 => Some(HashAlgorithm::Sha384),
+            8 => Some(HashAlgorithm::Sha512),
             _ => None,
         }
     }
@@ -67,6 +77,8 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
     fn from_ni_name(name: &str) -> Option<Self> {
         match name {
             "sha-256" => Some(HashAlgorithm::Sha256),
+            "sha-384" => Some(HashAlgorithm::Sha384),
+            "sha-512" => Some(HashAlgorithm::Sha512),
             _ => None,
         }
     }
@@ -75,7 +87,7 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
 #[derive(defmt::Format)]
 pub struct HashState {
     algorithm: HashAlgorithm,
-    state: Option<[u8; 32]>,
+    state: Option<[u8; 64]>,
     block: [u8; BLOCK_SIZE],
     block_bytes_used: usize,
     processed_bytes: usize,
@@ -83,12 +95,16 @@ pub struct HashState {
 
 pub enum HashResult {
     Sha256([u8; 32]),
+    Sha384([u8; 48]),
+    Sha512([u8; 64]),
 }
 
 impl AsRef<[u8]> for HashResult {
     fn as_ref(&self) -> &[u8] {
         match self {
             HashResult::Sha256(r) => &r[..],
+            HashResult::Sha384(r) => &r[..],
+            HashResult::Sha512(r) => &r[..],
         }
     }
 }
@@ -99,32 +115,42 @@ fn sz(n: usize) -> u32 {
     (group_end | DMA_REALIGN) as u32
 }
 
-fn sha256_padding(msg_len: usize, out: &mut [u8; 128]) -> usize {
+fn sha256_padding(msg_len: usize, out: &mut [u8; 256]) -> usize {
+    sha2_padding(msg_len, 64, 56, 8, out)
+}
+
+fn sha512_padding(msg_len: usize, out: &mut [u8; 256]) -> usize {
+    sha2_padding(msg_len, 128, 112, 16, out)
+}
+
+fn sha2_padding(
+    msg_len: usize,
+    block_size: usize,
+    length_offset: usize,
+    length_bytes: usize,
+    out: &mut [u8; 256],
+) -> usize {
     out[0] = 0x80;
 
-    // compute zero padding length
-    let mod_len = (msg_len + 1) % 64;
+    let rem = (msg_len + 1) % block_size;
 
-    let zero_pad_len = if mod_len <= 56 {
-        // fits in one block
-        56 - mod_len
+    let zero_pad = if rem <= length_offset {
+        length_offset - rem
     } else {
-        // needs two blocks
-        64 + 56 - mod_len
+        length_offset + (block_size - rem)
     };
 
-    for addr in out.iter_mut().take(zero_pad_len + 1).skip(1) {
-        *addr = 0;
+    for b in &mut out[1..=zero_pad] {
+        *b = 0;
     }
 
-    // append 64-bit length (big endian)
-    let bit_len = (msg_len as u64) * 8;
-    let be = bit_len.to_be_bytes();
+    let bit_len = (msg_len as u128) * 8;
+    let len_bytes_be = bit_len.to_be_bytes();
 
-    let length_pos = 1 + zero_pad_len;
-    out[length_pos..(8 + length_pos)].copy_from_slice(&be);
+    let start = 1 + zero_pad;
+    out[start..start + length_bytes].copy_from_slice(&len_bytes_be[(16 - length_bytes)..]);
 
-    1 + zero_pad_len + 8
+    1 + zero_pad + length_bytes
 }
 
 impl embedded_cal::HashProvider for Nrf54l15Cal {
@@ -159,14 +185,16 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
 
         let dma = self.p.global_cracencore_s.cryptmstrdma();
 
-        let mut new_state: [u8; 32] = [0x00; 32];
+        let mut new_state: [u8; 64] = [0x00; 64];
 
         let header: [u8; 4] = [instance.algorithm as u8, 0x00, 0x00, 0x00];
+
+        let algo_len = embedded_cal::HashAlgorithm::len(&instance.algorithm);
 
         let mut out_desc = Descriptor {
             addr: new_state.as_mut_ptr(),
             next: LAST_DESC_PTR,
-            sz: sz(32),
+            sz: sz(algo_len),
             dmatag: 32,
         };
 
@@ -183,7 +211,7 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
             descriptors.push(Descriptor {
                 addr: state.as_ptr() as *mut u8,
                 next: core::ptr::null_mut(),
-                sz: sz(32),
+                sz: sz(algo_len),
                 dmatag: 99,
             });
         }
@@ -240,18 +268,27 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
     fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
         let dma = self.p.global_cracencore_s.cryptmstrdma();
 
-        let mut pad: [u8; 128] = [0x00; 128];
-        let padding_size = sha256_padding(
-            instance.processed_bytes + instance.block_bytes_used,
-            &mut pad,
-        );
+        let mut pad: [u8; 256] = [0x00; 256];
 
-        let mut out: [u8; 32] = [0x00; 32];
+        let padding_size = match instance.algorithm {
+            HashAlgorithm::Sha256 => sha256_padding(
+                instance.processed_bytes + instance.block_bytes_used,
+                &mut pad,
+            ),
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 => sha512_padding(
+                instance.processed_bytes + instance.block_bytes_used,
+                &mut pad,
+            ),
+        };
+
+        let algo_len = embedded_cal::HashAlgorithm::len(&instance.algorithm);
+
+        let mut out: [u8; 64] = [0x00; 64];
 
         let mut out_desc = Descriptor {
             addr: out.as_mut_ptr(),
             next: LAST_DESC_PTR,
-            sz: sz(32),
+            sz: sz(algo_len),
             dmatag: 32,
         };
 
@@ -315,6 +352,22 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
         while dma.status().read().fetchbusy().bit_is_set() {}
         while dma.status().read().pushbusy().bit_is_set() {}
 
-        HashResult::Sha256(out)
+        match instance.algorithm {
+            HashAlgorithm::Sha256 => {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&out[..32]);
+                HashResult::Sha256(arr)
+            }
+            HashAlgorithm::Sha384 => {
+                let mut arr = [0u8; 48];
+                arr.copy_from_slice(&out[..48]);
+                HashResult::Sha384(arr)
+            }
+            HashAlgorithm::Sha512 => {
+                let mut arr = [0u8; 64];
+                arr.copy_from_slice(&out[..64]);
+                HashResult::Sha512(arr)
+            }
+        }
     }
 }
