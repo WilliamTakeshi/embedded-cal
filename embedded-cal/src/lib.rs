@@ -55,6 +55,9 @@ pub trait HashAlgorithm: Sized + PartialEq + Eq + core::fmt::Debug + Clone {
 
     /// Selects a hash algorithm from its COSE number.
     ///
+    /// The algorithm number comes from the ["COSE Algorithms"
+    /// registry](https://www.iana.org/assignments/cose/cose.xhtml#algorithms) maintained by IANA.
+    ///
     /// FIXME: Do they really have matching COSE algorithm numbers? OSCORE and EDHOC use -10 for
     /// SHA-256, but that may be a stretch. Maybe this should also be
     /// `from_algorithm_underlying_cose_directhkdf_number()`?
