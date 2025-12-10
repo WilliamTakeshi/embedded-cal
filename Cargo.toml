@@ -3,6 +3,7 @@ members = [
     "embedded-cal",
     "embedded-cal-nrf54l15",
     "embedded-cal-rustcrypto",
+    "embedded-cal-stm32wba55",
     "testvectors"
 ]
 

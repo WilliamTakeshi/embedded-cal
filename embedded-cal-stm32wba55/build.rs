@@ -5,9 +5,7 @@ fn main() {
 
     // copy memory.x into OUT_DIR, so we can have a different memory.x for each chip
     fs::copy("memory.x", out.join("memory.x")).expect("could not copy memory.x");
-    fs::copy("device.x", out.join("device.x")).expect("could not copy device.x");
 
     println!("cargo:rustc-link-search={}", out.display());
     println!("cargo:rerun-if-changed=memory.x");
-    println!("cargo:rerun-if-changed=device.x");
 }
