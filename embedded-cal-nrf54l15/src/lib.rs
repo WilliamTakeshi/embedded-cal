@@ -1,10 +1,7 @@
-#![no_main]
 #![no_std]
 mod descriptor;
 
-use defmt_rtt as _;
 use descriptor::{Descriptor, DescriptorChain, LAST_DESC_PTR};
-use panic_probe as _;
 
 const BLOCK_SIZE: usize = 128;
 
@@ -37,7 +34,7 @@ impl Drop for Nrf54l15Cal {
 }
 
 #[repr(u8)]
-#[derive(PartialEq, Eq, Debug, Clone, Copy, defmt::Format)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 /// Choice of a supported hash algorithm.
 ///
 /// Enum values currently represent the first byte of the engine header.
@@ -97,7 +94,6 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
     }
 }
 
-#[derive(defmt::Format)]
 pub struct HashState {
     algorithm: HashAlgorithm,
     state: Option<[u8; 64]>,

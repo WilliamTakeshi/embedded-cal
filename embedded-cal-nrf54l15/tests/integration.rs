@@ -1,7 +1,8 @@
 #![no_std]
 #![no_main]
 
-use embedded_cal_nrf54l15 as _; // memory layout + panic handler
+use defmt_rtt as _;
+use panic_probe as _;
 
 struct TestState {
     cal: embedded_cal_nrf54l15::Nrf54l15Cal,
