@@ -49,7 +49,7 @@ At any rate, a provider of cryptographic primitives can offer any subset of them
     * Backends can use references to keys and thus not create them in memory.
     * Secrets handled by the library are handled though zeroizing or similar interfaces.
 * Instances are accessed through an exclusive reference.
-    * A wrapper generic over a Mutex provides shared access (optional)
+    * A wrapper generic over a Mutex provides shared access ([#10](https://github.com/lake-rs/embedded-cal/issues/10), optional)
     * Incomplete operations should not block the system:
       Not all operations are expected to be complted before an operation of the same kind is started.
 
