@@ -2,19 +2,19 @@
     clippy::manual_dangling_ptr,
     reason = "nRF54L15 uses 1 as last-descriptor sentinel"
 )]
-pub const LAST_DESC_PTR: *mut Descriptor = 1 as *mut Descriptor;
+pub(crate) const LAST_DESC_PTR: *mut Descriptor = 1 as *mut Descriptor;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct Descriptor {
-    pub addr: *mut u8,
-    pub next: *mut Descriptor,
-    pub sz: u32,
-    pub dmatag: u32,
+pub(crate) struct Descriptor {
+    pub(crate) addr: *mut u8,
+    pub(crate) next: *mut Descriptor,
+    pub(crate) sz: u32,
+    pub(crate) dmatag: u32,
 }
 
 impl Descriptor {
-    pub fn empty() -> Self {
+    fn empty() -> Self {
         Self {
             addr: core::ptr::null_mut(),
             next: core::ptr::null_mut(),
@@ -24,20 +24,20 @@ impl Descriptor {
     }
 }
 
-pub struct DescriptorChain {
+pub(crate) struct DescriptorChain {
     descs: [Descriptor; 4],
     count: usize,
 }
 
 impl DescriptorChain {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             descs: [Descriptor::empty(); 4],
             count: 0,
         }
     }
 
-    pub fn push(&mut self, desc: Descriptor) {
+    pub(crate) fn push(&mut self, desc: Descriptor) {
         assert!(self.count < 4);
 
         let idx = self.count;
@@ -53,7 +53,7 @@ impl DescriptorChain {
         self.descs[idx].next = LAST_DESC_PTR;
     }
 
-    pub fn first(&mut self) -> *mut Descriptor {
+    pub(crate) fn first(&mut self) -> *mut Descriptor {
         if self.count == 0 {
             core::ptr::null_mut()
         } else {
