@@ -1,5 +1,8 @@
 use hexlit::hex;
 
+// Test vectors from NIST FIPS 180-4
+// Source: https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/secure-hashing
+// Used under NIST software/data disclaimer.
 pub const SHA256HASHES: &[(&[u8], [u8; 32])] = &[
     (
         b"",
