@@ -81,12 +81,9 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
         }
     }
 
-    // FIXME: I am using the values from RFC 9054 here, is that correct?
-    // https://www.rfc-editor.org/rfc/rfc9054.html#name-sha-2-hash-algorithms
     fn from_cose_number(number: impl Into<i128>) -> Option<Self> {
         match number.into() {
-            -10 => Some(HashAlgorithm::Sha256),
-            // -16 => Some(HashAlgorithm::Sha256),
+            -16 => Some(HashAlgorithm::Sha256),
             -43 => Some(HashAlgorithm::Sha384),
             -44 => Some(HashAlgorithm::Sha512),
             _ => None,
