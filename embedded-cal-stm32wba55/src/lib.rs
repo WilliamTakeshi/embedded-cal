@@ -11,7 +11,7 @@ pub struct Stm32wba55 {
 impl Stm32wba55 {
     pub fn new(hash: stm32wba55_pac::HASH, rcc: &stm32wba55_pac::RCC) -> Self {
         // Enable HASH clock
-        rcc.rcc_ahb2enr().modify(|_, w| w.hashen().set_bit());
+        rcc.rcc_ahb2enr().write(|w| w.hashen().set_bit());
 
         Self { hash }
     }
@@ -103,14 +103,7 @@ impl embedded_cal::HashProvider for Stm32wba55 {
         self.hash.hash_cr().write(|w| w.init().set_bit());
         while self.hash.hash_cr().read().init().bit_is_set() {}
 
-        // Configure SHA-256, 8-bit datatype
-        self.hash.hash_cr().write(|w| {
-            w.mode().clear_bit(); // hash mode
-            w.dmae().clear_bit();
-            w.algo().b_0x3(); // SHA2-256
-            w.datatype().b_0x2(); // 8-bit input
-            w.init().set_bit() // launch new context
-        });
+        self.configure_and_reset_context(instance.algorithm);
 
         if !instance.first_block {
             self.restore_context(&instance);
@@ -135,9 +128,11 @@ impl embedded_cal::HashProvider for Stm32wba55 {
             let snd_byte = instance.block[(chunk_id * 4) + 1];
             let trd_byte = instance.block[(chunk_id * 4) + 2];
             let fth_byte = instance.block[(chunk_id * 4) + 3];
-            self.hash.hash_din().write(|w| unsafe {
-                w.bits(u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]))
-            });
+            let word = u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]);
+
+            self.hash
+                .hash_din()
+                .write(|w| unsafe { w.datain().bits(word) });
         }
 
         pointer += data_bytes_used;
@@ -151,9 +146,11 @@ impl embedded_cal::HashProvider for Stm32wba55 {
                 let snd_byte = data[pointer + (chunk_id * 4) + 1];
                 let trd_byte = data[pointer + (chunk_id * 4) + 2];
                 let fth_byte = data[pointer + (chunk_id * 4) + 3];
-                self.hash.hash_din().write(|w| unsafe {
-                    w.bits(u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]))
-                });
+                let word = u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]);
+
+                self.hash
+                    .hash_din()
+                    .write(|w| unsafe { w.datain().bits(word) });
             }
         }
 
@@ -171,13 +168,8 @@ impl embedded_cal::HashProvider for Stm32wba55 {
         while self.hash.hash_cr().read().init().bit_is_set() {}
 
         // Configure SHA-256, 8-bit datatype
-        self.hash.hash_cr().write(|w| {
-            w.mode().clear_bit(); // hash mode
-            w.dmae().clear_bit();
-            w.algo().b_0x3(); // SHA2-256
-            w.datatype().b_0x2(); // 8-bit input
-            w.init().set_bit() // launch new context
-        });
+        self.configure_and_reset_context(instance.algorithm);
+
         if !instance.first_block {
             self.restore_context(&instance);
         }
@@ -188,9 +180,11 @@ impl embedded_cal::HashProvider for Stm32wba55 {
             let snd_byte = instance.block[(chunk_id * 4) + 1];
             let trd_byte = instance.block[(chunk_id * 4) + 2];
             let fth_byte = instance.block[(chunk_id * 4) + 3];
-            self.hash.hash_din().write(|w| unsafe {
-                w.bits(u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]))
-            });
+            let word = u32::from_le_bytes([fst_byte, snd_byte, trd_byte, fth_byte]);
+
+            self.hash
+                .hash_din()
+                .write(|w| unsafe { w.datain().bits(word) });
         }
 
         let number_bytes_last_chunk = instance.block_bytes_used % 4;
@@ -214,7 +208,7 @@ impl embedded_cal::HashProvider for Stm32wba55 {
 
 impl Stm32wba55 {
     fn save_context(&mut self, instance: &mut HashState) {
-        // BUSY must be 0 (you handled this before calling save)
+        // FIXME: BUSY must be 0
         instance.imr = self.hash.hash_imr().read().bits();
         instance.str = self.hash.hash_str().read().bits();
         instance.cr = self.hash.hash_cr().read().bits();
@@ -226,7 +220,7 @@ impl Stm32wba55 {
     }
 
     fn restore_context(&mut self, ctx: &HashState) {
-        self.hash.hash_cr().modify(|_, w| w.init().clear_bit());
+        self.hash.hash_cr().write(|w| w.init().clear_bit());
         // 1. Restore IMR, STR, CR (with INIT=0!)
         self.hash.hash_imr().write(|w| unsafe { w.bits(ctx.imr) });
         self.hash.hash_str().write(|w| unsafe { w.bits(ctx.str) });
@@ -248,12 +242,20 @@ impl Stm32wba55 {
         }
     }
     fn wait_busy(&mut self) {
-        while self.hash.hash_sr().read().busy().bit_is_set() {
-            // asm::nop();
-        }
-        while self.hash.hash_sr().read().dcis().bit_is_clear() {
-            // asm::nop();
-        }
+        while self.hash.hash_sr().read().busy().bit_is_set() {}
+        while self.hash.hash_sr().read().dcis().bit_is_clear() {}
+    }
+
+    fn configure_and_reset_context(&mut self, algo: HashAlgorithm) {
+        match algo {
+            HashAlgorithm::Sha256 => self.hash.hash_cr().write(|w| {
+                w.mode().clear_bit(); // hash mode
+                w.dmae().clear_bit();
+                w.algo().b_0x3(); // SHA2-256
+                w.datatype().b_0x2();
+                w.init().set_bit()
+            }),
+        };
     }
 
     fn read_digest(&mut self, out: &mut [u32; 8]) {
