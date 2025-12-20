@@ -11,11 +11,6 @@ struct TestState {
 mod tests {
     use embedded_cal_stm32wba55::Stm32wba55;
 
-    #[test]
-    fn test_empty() {
-        assert!(true)
-    }
-
     #[init]
     fn init() -> super::TestState {
         let p = stm32wba::stm32wba55::Peripherals::take().unwrap();
@@ -32,14 +27,4 @@ mod tests {
         >();
         testvectors::test_hash_algorithm_sha256(&mut state.cal);
     }
-
-    // #[test]
-    // fn test_hash_algorithm_sha384(state: &mut super::TestState) {
-    //     testvectors::test_hash_algorithm_sha384(&mut state.cal);
-    // }
-
-    // #[test]
-    // fn test_hash_algorithm_sha512(state: &mut super::TestState) {
-    //     testvectors::test_hash_algorithm_sha512(&mut state.cal);
-    // }
 }

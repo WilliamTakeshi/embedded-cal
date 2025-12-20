@@ -17,7 +17,6 @@ impl Stm32wba55 {
     }
 }
 
-// #[repr(u8)]
 #[derive(PartialEq, Eq, Debug, Clone, Copy, defmt::Format)]
 pub enum HashAlgorithm {
     Sha256,
@@ -30,8 +29,6 @@ impl embedded_cal::HashAlgorithm for HashAlgorithm {
         }
     }
 
-    // FIXME: I am using the values from RFC 9054 here, is that correct?
-    // https://www.rfc-editor.org/rfc/rfc9054.html#name-sha-2-hash-algorithms
     fn from_cose_number(number: impl Into<i128>) -> Option<Self> {
         match number.into() {
             -16 => Some(HashAlgorithm::Sha256),
@@ -161,7 +158,7 @@ impl embedded_cal::HashProvider for Stm32wba55 {
         self.hash.hash_cr().write(|w| w.init().set_bit());
         while self.hash.hash_cr().read().init().bit_is_set() {}
 
-        // Configure SHA-256, 8-bit datatype
+        // Configure SHA-256
         self.configure_and_reset_context(instance.algorithm);
 
         if !instance.first_block {
@@ -200,7 +197,9 @@ impl embedded_cal::HashProvider for Stm32wba55 {
 
 impl Stm32wba55 {
     fn save_context(&mut self, instance: &mut HashState) {
-        // FIXME: BUSY must be 0
+        // BUSY must be 0
+        while self.hash.hash_sr().read().busy().bit_is_set() {}
+
         instance.imr = self.hash.hash_imr().read().bits();
         instance.str = self.hash.hash_str().read().bits();
         instance.cr = self.hash.hash_cr().read().bits();
