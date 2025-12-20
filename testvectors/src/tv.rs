@@ -4,10 +4,10 @@ use hexlit::hex;
 // Source: https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/secure-hashing
 // Used under NIST software/data disclaimer.
 pub const SHA256HASHES: &[(&[u8], [u8; 32])] = &[
-    // (
-    //     b"",
-    //     hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
-    // ),
+    (
+        b"",
+        hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+    ),
     (
         b"hello world",
         hex!("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"),
