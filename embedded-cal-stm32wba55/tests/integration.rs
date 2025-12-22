@@ -11,12 +11,10 @@ struct TestState {
 #[defmt_test::tests]
 mod tests {
     use embedded_cal_stm32wba55::Stm32wba55;
-
     #[init]
     fn init() -> super::TestState {
-        let p = stm32wba::stm32wba55::Peripherals::take().unwrap();
-
-        let cal = embedded_cal_stm32wba55::Stm32wba55::new(p.HASH, &p.RCC);
+        let cal =
+            embedded_cal_stm32wba55::Stm32wba55::new(stm32_metapac::HASH, &stm32_metapac::RCC);
 
         super::TestState { cal }
     }

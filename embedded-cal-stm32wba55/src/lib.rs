@@ -1,18 +1,18 @@
 #![no_std]
 
-use stm32wba::stm32wba55 as stm32wba55_pac;
+use stm32_metapac::{hash, rcc};
 
 const SHA256_BLOCK_SIZE: usize = 64;
 const WORD_SIZE: usize = 4;
 
 pub struct Stm32wba55 {
-    hash: stm32wba55_pac::HASH,
+    hash: hash::Hash,
 }
 
 impl Stm32wba55 {
-    pub fn new(hash: stm32wba55_pac::HASH, rcc: &stm32wba55_pac::RCC) -> Self {
+    pub fn new(hash: hash::Hash, rcc: &rcc::Rcc) -> Self {
         // Enable HASH clock
-        rcc.rcc_ahb2enr().write(|w| w.hashen().set_bit());
+        rcc.ahb2enr().modify(|w| w.set_hashen(true));
 
         Self { hash }
     }
@@ -58,11 +58,11 @@ pub struct HashState {
     /// HASH context swap registers (HASH_CSR0 - HASH_CSR53)
     csr: [u32; 54],
     /// HASH start register (HASH_STR)
-    str: u32,
+    str: hash::regs::Str,
     /// HASH interrupt enable register (HASH_IMR)
-    imr: u32,
+    imr: hash::regs::Imr,
     /// HASH control register (HASH_CR)
-    cr: u32,
+    cr: hash::regs::Cr,
 
     /// Buffer for pending input. SHA-256 requires feeding complete NBWE-sized
     /// blocks to the hardware, so this stores leftover bytes when the caller
@@ -97,9 +97,9 @@ impl embedded_cal::HashProvider for Stm32wba55 {
         Self::HashState {
             algorithm: algorithm,
             csr: [0; 54],
-            str: 0,
-            imr: 0,
-            cr: 0,
+            str: hash::regs::Str(0),
+            imr: hash::regs::Imr(0),
+            cr: hash::regs::Cr(0),
             block: [0; 68],
             block_bytes_used: 0,
             first_block: true,
@@ -108,8 +108,8 @@ impl embedded_cal::HashProvider for Stm32wba55 {
 
     fn update(&mut self, instance: &mut HashState, data: &[u8]) {
         // Reinitialize the HASH peripheral before processing new input
-        self.hash.hash_cr().write(|w| w.init().set_bit());
-        while self.hash.hash_cr().read().init().bit_is_set() {}
+        self.hash.cr().write(|w| w.set_init(true));
+        while self.hash.cr().read().init() {}
         self.configure_and_reset_context(instance.algorithm);
 
         // Restore the previously saved intermediate state for non-initial blocks.
@@ -119,7 +119,7 @@ impl embedded_cal::HashProvider for Stm32wba55 {
 
         // Hardware can only pause hashing after exactly NBWE (Number of words expected) words have been written.
         // For SHA-256 this corresponds to 17 words for the first block, and 16 words for all subsequent blocks.
-        // Equivalent value available at: self.hash.hash_sr().read().nbwe().bits()
+        // Equivalent value available at: self.hash.sr().read().nbwe().bits()
         let block_size = SHA256_BLOCK_SIZE + if instance.first_block { WORD_SIZE } else { 0 };
 
         // Case 1: the provided data fits entirely in the current partial block.
@@ -144,9 +144,10 @@ impl embedded_cal::HashProvider for Stm32wba55 {
             bytes.copy_from_slice(chunk);
             let word = u32::from_be_bytes(bytes);
 
-            self.hash
-                .hash_din()
-                .write(|w| unsafe { w.datain().bits(word) });
+            // self.hash
+            //     .hash_din()
+            //     .write(|w| unsafe { w.datain().bits(word) });
+            self.hash.din().write_value(word);
         }
 
         // Still on case 2, if data left doesn't fully fit on the block,
@@ -162,9 +163,10 @@ impl embedded_cal::HashProvider for Stm32wba55 {
                 buf.copy_from_slice(chunk);
                 let word = u32::from_be_bytes(buf);
 
-                self.hash
-                    .hash_din()
-                    .write(|w| unsafe { w.datain().bits(word) });
+                // self.hash
+                //     .hash_din()
+                //     .write(|w| unsafe { w.datain().bits(word) });
+                self.hash.din().write_value(word);
             }
         }
 
@@ -180,8 +182,8 @@ impl embedded_cal::HashProvider for Stm32wba55 {
 
     fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
         // Reset HASH state
-        self.hash.hash_cr().write(|w| w.init().set_bit());
-        while self.hash.hash_cr().read().init().bit_is_set() {}
+        self.hash.cr().write(|w| w.set_init(true));
+        while self.hash.cr().read().init() {}
 
         // Configure SHA-256
         self.configure_and_reset_context(instance.algorithm);
@@ -196,17 +198,21 @@ impl embedded_cal::HashProvider for Stm32wba55 {
             bytes[..chunk.len()].copy_from_slice(chunk);
             let word = u32::from_be_bytes(bytes);
 
-            self.hash
-                .hash_din()
-                .write(|w| unsafe { w.datain().bits(word) });
+            // self.hash
+            //     .hash_din()
+            //     .write(|w| unsafe { w.datain().bits(word) });
+            self.hash.din().write_value(word);
         }
 
         let number_bytes_last_chunk = instance.block_bytes_used % WORD_SIZE;
 
+        // self.hash
+        //     .hash_str()
+        //     .write(|w| unsafe { w.nblw().bits(number_bytes_last_chunk as u8 * 8) });
         self.hash
-            .hash_str()
-            .write(|w| unsafe { w.nblw().bits(number_bytes_last_chunk as u8 * 8) });
-        self.hash.hash_str().write(|w| w.dcal().set_bit());
+            .str()
+            .write(|w| w.set_nblw((number_bytes_last_chunk as u8) * 8));
+        self.hash.str().write(|w| w.set_dcal(true));
 
         self.wait_busy();
         let mut hash_res_words: [u32; 8] = [0; 8];
@@ -227,12 +233,12 @@ impl Stm32wba55 {
     /// https://www.st.com/resource/en/reference_manual/rm0493-multiprotocol-wireless-bluetooth-lowenergy-armbased-32bit-mcu-stmicroelectronics.pdf
     fn save_context(&mut self, instance: &mut HashState) {
         // BUSY must be 0
-        while self.hash.hash_sr().read().busy().bit_is_set() {}
+        while self.hash.sr().read().busy() {}
 
         // Save IMR + STR + CR registers
-        instance.imr = self.hash.hash_imr().read().bits();
-        instance.str = self.hash.hash_str().read().bits();
-        instance.cr = self.hash.hash_cr().read().bits();
+        instance.imr = self.hash.imr().read();
+        instance.str = self.hash.str().read();
+        instance.cr = self.hash.cr().read();
 
         // Save CSR registers (0..37 always; 38..53 only for HMAC)
         for i in 0..54 {
@@ -244,20 +250,20 @@ impl Stm32wba55 {
     /// Used to resume processing of an interrupted message.
     /// https://www.st.com/resource/en/reference_manual/rm0493-multiprotocol-wireless-bluetooth-lowenergy-armbased-32bit-mcu-stmicroelectronics.pdf
     fn restore_context(&mut self, ctx: &HashState) {
-        self.hash.hash_cr().write(|w| w.init().clear_bit());
+        self.hash.cr().write(|w| w.set_init(false));
         // 1. Restore IMR, STR, CR (with INIT=0)
-        self.hash.hash_imr().write(|w| unsafe { w.bits(ctx.imr) });
-        self.hash.hash_str().write(|w| unsafe { w.bits(ctx.str) });
-        self.hash.hash_cr().write(|w| {
-            w.mode().clear_bit(); // hash mode
-            w.dmae().clear_bit();
-            w.algo().b_0x3(); // SHA2-256
-            w.datatype().b_0x0()
+        self.hash.imr().write_value(ctx.imr);
+        self.hash.str().write_value(ctx.str);
+        self.hash.cr().write(|w| {
+            w.set_mode(false); // hash mode
+            w.set_dmae(false);
+            w.set_algo(3); // SHA2-256
+            w.set_datatype(0)
         });
 
         // 2. Set INIT to reload STR/CR context into hardware
-        self.hash.hash_cr().modify(|_, w| w.init().set_bit());
-        while self.hash.hash_cr().read().init().bit_is_set() {}
+        self.hash.cr().modify(|w| w.set_init(true));
+        while self.hash.cr().read().init() {}
 
         // 3. Restore CSR registers AFTER INIT has reinitialized the core
         for i in 0..54 {
@@ -265,152 +271,35 @@ impl Stm32wba55 {
         }
     }
     fn wait_busy(&mut self) {
-        while self.hash.hash_sr().read().busy().bit_is_set() {}
-        while self.hash.hash_sr().read().dcis().bit_is_clear() {}
+        while self.hash.sr().read().busy() {}
+        while !self.hash.sr().read().dcis() {}
     }
 
     fn configure_and_reset_context(&mut self, algo: HashAlgorithm) {
         match algo {
-            HashAlgorithm::Sha256 => self.hash.hash_cr().write(|w| {
-                w.mode().clear_bit(); // hash mode
-                w.dmae().clear_bit();
-                w.algo().b_0x3(); // SHA2-256
-                w.datatype().b_0x0();
-                w.init().set_bit()
+            HashAlgorithm::Sha256 => self.hash.cr().write(|w| {
+                w.set_mode(false); // hash mode
+                w.set_dmae(false);
+                w.set_algo(3); // SHA2-256
+                w.set_datatype(0);
+                w.set_init(true)
             }),
         };
     }
 
     fn read_digest(&mut self, out: &mut [u32; 8]) {
-        out[0] = self.hash.hash_hr0().read().bits();
-        out[1] = self.hash.hash_hr1().read().bits();
-        out[2] = self.hash.hash_hr2().read().bits();
-        out[3] = self.hash.hash_hr3().read().bits();
-        out[4] = self.hash.hash_hr4().read().bits();
-        out[5] = self.hash.hash_hr5().read().bits();
-        out[6] = self.hash.hash_hr6().read().bits();
-        out[7] = self.hash.hash_hr7().read().bits();
-    }
-
-    // FIXME: Use a macro to make it easier to read.
-    fn read_csr(&mut self, idx: usize) -> u32 {
-        match idx {
-            0 => self.hash.hash_csr0().read().bits(),
-            1 => self.hash.hash_csr1().read().bits(),
-            2 => self.hash.hash_csr2().read().bits(),
-            3 => self.hash.hash_csr3().read().bits(),
-            4 => self.hash.hash_csr4().read().bits(),
-            5 => self.hash.hash_csr5().read().bits(),
-            6 => self.hash.hash_csr6().read().bits(),
-            7 => self.hash.hash_csr7().read().bits(),
-            8 => self.hash.hash_csr8().read().bits(),
-            9 => self.hash.hash_csr9().read().bits(),
-            10 => self.hash.hash_csr10().read().bits(),
-            11 => self.hash.hash_csr11().read().bits(),
-            12 => self.hash.hash_csr12().read().bits(),
-            13 => self.hash.hash_csr13().read().bits(),
-            14 => self.hash.hash_csr14().read().bits(),
-            15 => self.hash.hash_csr15().read().bits(),
-            16 => self.hash.hash_csr16().read().bits(),
-            17 => self.hash.hash_csr17().read().bits(),
-            18 => self.hash.hash_csr18().read().bits(),
-            19 => self.hash.hash_csr19().read().bits(),
-            20 => self.hash.hash_csr20().read().bits(),
-            21 => self.hash.hash_csr21().read().bits(),
-            22 => self.hash.hash_csr22().read().bits(),
-            23 => self.hash.hash_csr23().read().bits(),
-            24 => self.hash.hash_csr24().read().bits(),
-            25 => self.hash.hash_csr25().read().bits(),
-            26 => self.hash.hash_csr26().read().bits(),
-            27 => self.hash.hash_csr27().read().bits(),
-            28 => self.hash.hash_csr28().read().bits(),
-            29 => self.hash.hash_csr29().read().bits(),
-            30 => self.hash.hash_csr30().read().bits(),
-            31 => self.hash.hash_csr31().read().bits(),
-            32 => self.hash.hash_csr32().read().bits(),
-            33 => self.hash.hash_csr33().read().bits(),
-            34 => self.hash.hash_csr34().read().bits(),
-            35 => self.hash.hash_csr35().read().bits(),
-            36 => self.hash.hash_csr36().read().bits(),
-            37 => self.hash.hash_csr37().read().bits(),
-            38 => self.hash.hash_csr38().read().bits(),
-            39 => self.hash.hash_csr39().read().bits(),
-            40 => self.hash.hash_csr40().read().bits(),
-            41 => self.hash.hash_csr41().read().bits(),
-            42 => self.hash.hash_csr42().read().bits(),
-            43 => self.hash.hash_csr43().read().bits(),
-            44 => self.hash.hash_csr44().read().bits(),
-            45 => self.hash.hash_csr45().read().bits(),
-            46 => self.hash.hash_csr46().read().bits(),
-            47 => self.hash.hash_csr47().read().bits(),
-            48 => self.hash.hash_csr48().read().bits(),
-            49 => self.hash.hash_csr49().read().bits(),
-            50 => self.hash.hash_csr50().read().bits(),
-            51 => self.hash.hash_csr51().read().bits(),
-            52 => self.hash.hash_csr52().read().bits(),
-            53 => self.hash.hash_csr53().read().bits(),
-            _ => unreachable!(),
+        for i in 0..8 {
+            out[i] = self.hash.hr(i).read();
         }
     }
 
     // FIXME: Use a macro to make it easier to read.
+    fn read_csr(&mut self, idx: usize) -> u32 {
+        self.hash.csr(idx).read()
+    }
+
+    // FIXME: Use a macro to make it easier to read.
     fn write_csr(&mut self, idx: usize, value: u32) {
-        match idx {
-            0 => self.hash.hash_csr0().write(|w| unsafe { w.bits(value) }),
-            1 => self.hash.hash_csr1().write(|w| unsafe { w.bits(value) }),
-            2 => self.hash.hash_csr2().write(|w| unsafe { w.bits(value) }),
-            3 => self.hash.hash_csr3().write(|w| unsafe { w.bits(value) }),
-            4 => self.hash.hash_csr4().write(|w| unsafe { w.bits(value) }),
-            5 => self.hash.hash_csr5().write(|w| unsafe { w.bits(value) }),
-            6 => self.hash.hash_csr6().write(|w| unsafe { w.bits(value) }),
-            7 => self.hash.hash_csr7().write(|w| unsafe { w.bits(value) }),
-            8 => self.hash.hash_csr8().write(|w| unsafe { w.bits(value) }),
-            9 => self.hash.hash_csr9().write(|w| unsafe { w.bits(value) }),
-            10 => self.hash.hash_csr10().write(|w| unsafe { w.bits(value) }),
-            11 => self.hash.hash_csr11().write(|w| unsafe { w.bits(value) }),
-            12 => self.hash.hash_csr12().write(|w| unsafe { w.bits(value) }),
-            13 => self.hash.hash_csr13().write(|w| unsafe { w.bits(value) }),
-            14 => self.hash.hash_csr14().write(|w| unsafe { w.bits(value) }),
-            15 => self.hash.hash_csr15().write(|w| unsafe { w.bits(value) }),
-            16 => self.hash.hash_csr16().write(|w| unsafe { w.bits(value) }),
-            17 => self.hash.hash_csr17().write(|w| unsafe { w.bits(value) }),
-            18 => self.hash.hash_csr18().write(|w| unsafe { w.bits(value) }),
-            19 => self.hash.hash_csr19().write(|w| unsafe { w.bits(value) }),
-            20 => self.hash.hash_csr20().write(|w| unsafe { w.bits(value) }),
-            21 => self.hash.hash_csr21().write(|w| unsafe { w.bits(value) }),
-            22 => self.hash.hash_csr22().write(|w| unsafe { w.bits(value) }),
-            23 => self.hash.hash_csr23().write(|w| unsafe { w.bits(value) }),
-            24 => self.hash.hash_csr24().write(|w| unsafe { w.bits(value) }),
-            25 => self.hash.hash_csr25().write(|w| unsafe { w.bits(value) }),
-            26 => self.hash.hash_csr26().write(|w| unsafe { w.bits(value) }),
-            27 => self.hash.hash_csr27().write(|w| unsafe { w.bits(value) }),
-            28 => self.hash.hash_csr28().write(|w| unsafe { w.bits(value) }),
-            29 => self.hash.hash_csr29().write(|w| unsafe { w.bits(value) }),
-            30 => self.hash.hash_csr30().write(|w| unsafe { w.bits(value) }),
-            31 => self.hash.hash_csr31().write(|w| unsafe { w.bits(value) }),
-            32 => self.hash.hash_csr32().write(|w| unsafe { w.bits(value) }),
-            33 => self.hash.hash_csr33().write(|w| unsafe { w.bits(value) }),
-            34 => self.hash.hash_csr34().write(|w| unsafe { w.bits(value) }),
-            35 => self.hash.hash_csr35().write(|w| unsafe { w.bits(value) }),
-            36 => self.hash.hash_csr36().write(|w| unsafe { w.bits(value) }),
-            37 => self.hash.hash_csr37().write(|w| unsafe { w.bits(value) }),
-            38 => self.hash.hash_csr38().write(|w| unsafe { w.bits(value) }),
-            39 => self.hash.hash_csr39().write(|w| unsafe { w.bits(value) }),
-            40 => self.hash.hash_csr40().write(|w| unsafe { w.bits(value) }),
-            41 => self.hash.hash_csr41().write(|w| unsafe { w.bits(value) }),
-            42 => self.hash.hash_csr42().write(|w| unsafe { w.bits(value) }),
-            43 => self.hash.hash_csr43().write(|w| unsafe { w.bits(value) }),
-            44 => self.hash.hash_csr44().write(|w| unsafe { w.bits(value) }),
-            45 => self.hash.hash_csr45().write(|w| unsafe { w.bits(value) }),
-            46 => self.hash.hash_csr46().write(|w| unsafe { w.bits(value) }),
-            47 => self.hash.hash_csr47().write(|w| unsafe { w.bits(value) }),
-            48 => self.hash.hash_csr48().write(|w| unsafe { w.bits(value) }),
-            49 => self.hash.hash_csr49().write(|w| unsafe { w.bits(value) }),
-            50 => self.hash.hash_csr50().write(|w| unsafe { w.bits(value) }),
-            51 => self.hash.hash_csr51().write(|w| unsafe { w.bits(value) }),
-            52 => self.hash.hash_csr52().write(|w| unsafe { w.bits(value) }),
-            53 => self.hash.hash_csr53().write(|w| unsafe { w.bits(value) }),
-            _ => unreachable!(),
-        };
+        self.hash.csr(idx).write_value(value)
     }
 }
