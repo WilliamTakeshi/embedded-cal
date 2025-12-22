@@ -14,12 +14,8 @@ mod tests {
 
     #[init]
     fn init() -> super::TestState {
-        // Safety: These peripherals are taken exactly once during initialization
-        // This guarantees exclusive ownership of the underlying registers for the lifetime of the test
-        let cracen = unsafe { nrf54l15_app_pac::GlobalCracenS::steal() };
-        let cracen_core = unsafe { nrf54l15_app_pac::GlobalCracencoreS::steal() };
-
-        let cal = embedded_cal_nrf54l15::Nrf54l15Cal::new(cracen, cracen_core);
+        // FIXME: How to make sure there is a exclusive reference for CRACEN_S?
+        let cal = embedded_cal_nrf54l15::Nrf54l15Cal::new(nrf_pac::CRACEN_S, nrf_pac::CRACENCORE_S);
 
         super::TestState { cal }
     }

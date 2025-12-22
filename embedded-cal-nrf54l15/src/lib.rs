@@ -2,6 +2,7 @@
 mod descriptor;
 
 use descriptor::DescriptorChain;
+use nrf_pac::{cracen, cracencore};
 
 const BLOCK_SIZE: usize = 128;
 const MAX_DESCRIPTOR_CHAIN_LEN: usize = 4;
@@ -14,20 +15,17 @@ const _: () = {
 pub struct Nrf54l15Cal {
     // TODO: No need to enable and take ownership of everything
     // it's possible to have a more granular ownership
-    cracen: nrf54l15_app_pac::GlobalCracenS,
-    cracen_core: nrf54l15_app_pac::GlobalCracencoreS,
+    cracen: cracen::Cracen,
+    cracen_core: cracencore::Cracencore,
 }
 
 impl Nrf54l15Cal {
-    pub fn new(
-        cracen: nrf54l15_app_pac::GlobalCracenS,
-        cracen_core: nrf54l15_app_pac::GlobalCracencoreS,
-    ) -> Self {
+    pub fn new(cracen: cracen::Cracen, cracen_core: cracencore::Cracencore) -> Self {
         // Enable cryptomaster
         cracen.enable().write(|w| {
-            w.cryptomaster().set_bit();
-            w.rng().set_bit();
-            w.pkeikg().set_bit()
+            w.set_cryptomaster(true);
+            w.set_rng(true);
+            w.set_pkeikg(true)
         });
 
         Self {
@@ -41,9 +39,9 @@ impl Drop for Nrf54l15Cal {
     fn drop(&mut self) {
         // Disable cryptomaster on drop
         self.cracen.enable().write(|w| {
-            w.cryptomaster().clear_bit();
-            w.rng().clear_bit();
-            w.pkeikg().clear_bit()
+            w.set_cryptomaster(false);
+            w.set_rng(false);
+            w.set_pkeikg(false)
         });
     }
 }
@@ -328,28 +326,28 @@ impl Nrf54l15Cal {
         let dma = self.cracen_core.cryptmstrdma();
         // Configure DMA source
         dma.fetchaddrlsb()
-            .write(|w| unsafe { w.bits(input_descriptors.first() as u32) });
+            .write_value(input_descriptors.first() as u32);
 
         // Configure DMA sink
         dma.pushaddrlsb()
-            .write(|w| unsafe { w.bits(output_descriptors.first() as u32) });
+            .write_value(output_descriptors.first() as u32);
 
         dma.config().write(|w| {
-            w.fetchctrlindirect().set_bit();
-            w.pushctrlindirect().set_bit();
-            w.fetchstop().clear_bit();
-            w.pushstop().clear_bit();
-            w.softrst().clear_bit()
+            w.set_fetchctrlindirect(true);
+            w.set_pushctrlindirect(true);
+            w.set_fetchstop(false);
+            w.set_pushstop(false);
+            w.set_softrst(false)
         });
 
         // Start DMA
         dma.start().write(|w| {
-            w.startfetch().set_bit();
-            w.startpush().set_bit()
+            w.set_startfetch(true);
+            w.set_startpush(true)
         });
 
         // Wait
-        while dma.status().read().fetchbusy().bit_is_set() {}
-        while dma.status().read().pushbusy().bit_is_set() {}
+        while dma.status().read().fetchbusy() {}
+        while dma.status().read().pushbusy() {}
     }
 }
