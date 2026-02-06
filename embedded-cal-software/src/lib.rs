@@ -10,13 +10,19 @@ use embedded_cal::{
     plumbing::hash::{SHA2SHORT_BLOCK_SIZE, Sha2Short, Sha2ShortVariant},
 };
 
-trait ExtenderConfig {
+pub trait ExtenderConfig {
     const IMPLEMENT_SHA2SHORT: bool;
 
     type Base: Cal + Plumbing;
 }
 
 pub struct Extender<EC: ExtenderConfig>(EC::Base);
+
+impl<EC: ExtenderConfig> Extender<EC> {
+    pub fn new(base: EC::Base) -> Self {
+        Self(base)
+    }
+}
 
 const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 
@@ -263,7 +269,7 @@ impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {
 
 // Remaining code is copied from https://github.com/lake-rs/embedded-cal/pull/9
 
-fn sha256_padding(msg_len: usize, out: &mut [u8; 256]) -> usize {
+pub fn sha256_padding(msg_len: usize, out: &mut [u8; 256]) -> usize {
     sha2_padding(msg_len, 64, 56, 8, out)
 }
 
