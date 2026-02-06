@@ -18,6 +18,7 @@ harness = false
 
 [dependencies]
 embedded-cal.path = "../embedded-cal"
+embedded-cal-software.path = "../embedded-cal-software"
 testvectors.path = "../testvectors"
 stm32-metapac = { version = "18.0", features = ["stm32wba55cg", "rt"] }
 
