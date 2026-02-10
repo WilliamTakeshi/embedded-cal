@@ -22,7 +22,8 @@ pub const SHA2SHORT_BLOCK_SIZE: usize = 64;
 /// field in their struct). They could avoid this by applying some clever tricks with putting the
 /// buffer in a possibly-zero-sized array if that is really an issue.
 pub const fn hash_buffer_requirements<T: Hash>() -> usize {
-    let for_sha2 = if <T as Sha2Short>::SUPPORTED {
+    // When more come, place the maximum here
+    if <T as Sha2Short>::SUPPORTED {
         if T::FIRST_CHUNK_SIZE > SHA2SHORT_BLOCK_SIZE {
             T::FIRST_CHUNK_SIZE
         } else {
@@ -30,7 +31,5 @@ pub const fn hash_buffer_requirements<T: Hash>() -> usize {
         }
     } else {
         0
-    };
-    // When more come, place the maximum here
-    for_sha2
+    }
 }
