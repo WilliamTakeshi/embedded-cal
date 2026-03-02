@@ -18,8 +18,6 @@ harness = false
 
 [dependencies]
 embedded-cal.path = "../embedded-cal"
-embedded-cal-software.path = "../embedded-cal-software"
-testvectors.path = "../testvectors"
 stm32-metapac = { version = "18.0", features = ["stm32wba55cg", "rt"] }
 
 [dev-dependencies]
@@ -28,4 +26,6 @@ cortex-m-rt = { version = "0.7", features = ["device"] }
 defmt = "1.0"
 defmt-rtt = "1.0"
 defmt-test = "0.4"
+embedded-cal-software.path = "../embedded-cal-software"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
+testvectors.path = "../testvectors"
