@@ -46,8 +46,6 @@ impl Drop for Nrf54l15Cal {
 }
 
 pub struct HashState {
-    // FIXME: Use this when implement SHA2-224
-    _variant: embedded_cal::plumbing::hash::Sha2ShortVariant,
     state: Option<[u8; 32]>,
 }
 
@@ -94,8 +92,14 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
     type State = HashState;
 
     fn init(&mut self, variant: embedded_cal::plumbing::hash::Sha2ShortVariant) -> Self::State {
+        match variant {
+            embedded_cal::plumbing::hash::Sha2ShortVariant::Sha256 => (),
+            // Although really all we need to support it is probably just copying the requested
+            // length into the output buffer
+            _ => todo!("Unsupported variant"),
+        };
+
         Self::State {
-            _variant: variant,
             state: None,
         }
     }
