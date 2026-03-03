@@ -108,6 +108,8 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
     }
 
     fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
+        debug_assert!(data.len() % 64 == 0, "Chunking requirements laid out in Self::FIRST_CHUNK_SIZE not upheld.");
+
         let mut new_state: [u8; 32] = [0x00; 32];
 
         let header: [u8; 4] = [0x08, 0x00, 0x00, 0x00];
