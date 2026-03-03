@@ -9,8 +9,10 @@ categories.workspace = true
 version.workspace = true
 
 [lib]
+# While the crate is already excluded from the workspace's defaults, setting
+# this also means that when `cargo test` is run in here, cargo reaches into the
+# local .cargo that sets up target and runner.
 test = false
-doc = false
 
 [[test]]
 name = "integration"
