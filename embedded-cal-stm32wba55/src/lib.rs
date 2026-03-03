@@ -77,11 +77,16 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
     }
 
     fn update(&mut self, instance: &mut HashState, data: &[u8]) {
+        debug_assert_eq!(
+            data.len(),
+            self.hash.sr().read().nbwe() as usize * WORD_SIZE,
+            "data length must match NBWE words expected by the hardware"
+        );
+
         self.reinit_and_restore(&instance.context);
 
         // Hardware can only pause hashing after exactly NBWE (Number of words expected) words have been written.
         // For SHA-256 this corresponds to 17 words for the first block, and 16 words for all subsequent blocks.
-        // Equivalent value available at: self.hash.sr().read().nbwe().bits()
         for chunk in data.chunks_exact(WORD_SIZE) {
             let mut bytes = [0u8; WORD_SIZE];
             bytes.copy_from_slice(chunk);
