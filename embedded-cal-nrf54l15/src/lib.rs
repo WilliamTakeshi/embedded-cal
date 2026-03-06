@@ -150,12 +150,10 @@ impl Nrf54l15Cal {
     ) -> () {
         let dma = self.cracen_core.cryptmstrdma();
         // Configure DMA source
-        dma.fetchaddrlsb()
-            .write_value(input_descriptors.first() as u32);
+        dma.fetchaddrlsb().write_value(input_descriptors.first());
 
         // Configure DMA sink
-        dma.pushaddrlsb()
-            .write_value(output_descriptors.first() as u32);
+        dma.pushaddrlsb().write_value(output_descriptors.first());
 
         dma.config().write(|w| {
             w.set_fetchctrlindirect(true);

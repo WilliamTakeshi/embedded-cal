@@ -60,8 +60,9 @@ pub(crate) struct Output;
 /// This type owns a small array of `Descriptor`s and tracks how many entries
 /// are currently in use.
 ///
-/// DescriptorChain also make sure they are linked like a linked-list
-/// and the last Descriptor.next is always LAST_DESC_PTR
+/// Descriptors are linked into a list (with the last terminated by [`LAST_DESC_PTR`])
+/// lazily, just before use, in [`first`](DescriptorChain::first). This avoids the
+/// struct being self-referential at rest, which would make it unsafe to move after pushing.
 ///
 /// `Direction` is either [`Input`] or [`Output`], distinguishing read-from-memory and
 /// write-to-memory chains at the type level.
@@ -95,21 +96,30 @@ impl<Direction, const N: usize> DescriptorChain<Direction, N> {
         let idx = self.count;
         self.descs[idx] = desc;
         self.count += 1;
+    }
 
-        // update links
-        if idx > 0 {
-            self.descs[idx - 1].next = &mut self.descs[idx];
+    /// Sets the `next` pointer of each descriptor to point to the following one,
+    /// and terminates the chain with [`LAST_DESC_PTR`].
+    ///
+    /// Links are set here rather than at push time to avoid the struct being
+    /// self-referential at rest (which would make it unsafe to move after pushing).
+    fn update_links(&mut self) {
+        for i in 1..self.count {
+            self.descs[i - 1].next = &mut self.descs[i];
         }
-
-        self.descs[idx].next = LAST_DESC_PTR;
+        if self.count > 0 {
+            self.descs[self.count - 1].next = LAST_DESC_PTR;
+        }
     }
 
     /// Returns an address to the first descriptor in the chain.
     ///
     /// This pointer is intended to be written to the EasyDMA input/output pointer
     /// register to start a scatter-gather transfer.
-    pub(crate) fn first(&mut self) -> u32 {
-        &mut self.descs[0] as *mut Descriptor as u32
+    fn first(&mut self) -> u32 {
+        assert!(self.count > 0);
+        self.update_links();
+        &self.descs[0] as *const Descriptor as u32
     }
 }
 
