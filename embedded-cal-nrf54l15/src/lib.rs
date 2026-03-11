@@ -1,3 +1,10 @@
+//! nRF54L15 CRACEN cryptomaster backend for embedded-cal.
+//!
+//! Most of the hardware interaction in this crate (DMA descriptor layout, tag
+//! encoding, algorithm config words, and the cryptomaster register sequence)
+//! was reverse-engineered from the Nordic SDK (`sdk-nrf`), specifically:
+//!   - `subsys/nrf_security/src/drivers/cracen/sxsymcrypt/*`
+//!   - `subsys/nrf_security/src/drivers/cracen/cracenpsa/*`
 #![no_std]
 mod descriptor;
 
@@ -6,8 +13,45 @@ use nrf_pac::{cracen, cracencore};
 
 use crate::descriptor::sz;
 
+/// Maximum number of descriptors in a single DMA input or output chain.
+///
+/// Four covers all cases for one hash chunk: config word + state + (optional
+/// padding) + payload data.
 const MAX_DESCRIPTOR_CHAIN_LEN: usize = 4;
+
+/// Size of the SHA-256 internal state in bytes (256 bits ÷ 8).
 const INTERNAL_STATE_LEN: usize = 32;
+
+/// Sent as the first byte of the 4-byte config-word descriptor that opens
+/// every DMA input chain. See the SHA-256 `sxhashalg` struct in
+/// `sdk-nrf/.../sxsymcrypt/src/hash.c`.
+const SHA256_BA413_MODE: u8 = 0x08;
+
+/// DMA tag for the algorithm-configuration descriptor (BA413 hash engine).
+///
+/// Encoded as `DMATAG_BA413(3) | DMATAG_CONFIG(offset=0)(16) = 19`.
+/// `DMATAG_CONFIG` (bit 4) marks this descriptor as carrying a hardware
+/// configuration word rather than message data. Must be the first descriptor
+/// in every input chain.
+/// Source: `cmdma.h` — `DMATAG_BA413 = 3`, `DMATAG_CONFIG(o) = (1<<4)|(o<<8)`.
+const DMATAG_BA413_CFG: u32 = 19;
+
+/// DMA tag for the intermediate SHA-256 state (running-hash) descriptor.
+///
+/// Encoded as `DMATAG_BA413(3) | DMATAG_DATATYPE_HEADER(1<<6=64) |
+/// DMATAG_LAST(1<<5=32) = 99`. `DATATYPE_HEADER` tells the BA413 engine this
+/// buffer contains the running digest state for a mid-stream resume rather
+/// than fresh message data. `LAST` signals no further header descriptors
+/// follow before payload.
+/// Source: `cmdma.h` — `DMATAG_DATATYPE_HEADER = (1<<6)`, `DMATAG_LAST = (1<<5)`.
+const DMATAG_BA413_STATE: u32 = 99;
+
+/// DMA tag for the final (or only) message-data descriptor (BA413 hash engine).
+///
+/// Encoded as `DMATAG_BA413(3) | DMATAG_LAST(1<<5=32) = 35`. `LAST` signals
+/// to the cryptomaster that no further input descriptors follow in this chain.
+/// Source: `cmdma.h` — `DMATAG_BA413 = 3`, `DMATAG_LAST = (1<<5)`.
+const DMATAG_BA413_DATA_LAST: u32 = 35;
 
 pub struct Nrf54l15Cal {
     // FIXME: No need to enable and take ownership of everything
@@ -113,7 +157,7 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
 
         let mut new_state: [u8; 32] = [0x00; 32];
 
-        let header: [u8; 4] = [0x08, 0x00, 0x00, 0x00];
+        let header: [u8; 4] = [SHA256_BA413_MODE, 0x00, 0x00, 0x00];
 
         let state_len = INTERNAL_STATE_LEN;
 
@@ -122,16 +166,16 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
 
         let mut input_descriptors = DescriptorChain::<MAX_DESCRIPTOR_CHAIN_LEN>::new();
 
-        input_descriptors.push(header.as_ptr() as *mut u8, sz(4), 19);
+        input_descriptors.push(header.as_ptr() as *mut u8, sz(4), DMATAG_BA413_CFG);
 
         if let Some(state) = &instance.state {
-            input_descriptors.push(state.as_ptr() as *mut u8, sz(state_len), 99);
+            input_descriptors.push(state.as_ptr() as *mut u8, sz(state_len), DMATAG_BA413_STATE);
         }
 
         input_descriptors.push(
             data.as_ptr() as *mut u8,
-            0x2000_0000 | data.len() as u32,
-            35,
+            sz(data.len()),
+            DMATAG_BA413_DATA_LAST,
         );
 
         self.execute_cryptomaster_dma(&mut input_descriptors, &mut output_descriptors);

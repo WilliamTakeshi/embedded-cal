@@ -1,3 +1,17 @@
+// DMA descriptor layout and tag encoding below were reverse-engineered from
+// https://github.com/nrfconnect/sdk-nrf
+// `sdk-nrf/.../sxsymcrypt/src/cmdma.h` and the associated cryptomaster driver.
+
+/// Bit 29 of a descriptor's `sz` field.
+///
+/// When set, instructs the cryptomaster DMA pusher to realign the output data
+/// to the start of the destination buffer, rather than continuing at whatever
+/// byte offset the previous transfer ended. Required whenever the output
+/// descriptor does not start on a natural alignment boundary.
+///
+/// Source: `DMA_REALIGN = (1 << 29)` in `sdk-nrf/subsys/nrf_security/src/drivers/cracen/sxsymcrypt/src/cmdma.h`.
+pub(crate) const DMA_REALIGN: usize = 0x2000_0000;
+
 /// Pointer to memory address 1.
 /// It means that the descriptor chain is over
 #[allow(
@@ -22,11 +36,19 @@ struct Descriptor {
     ///
     /// Should be LAST_DESC_PTR in case of the last descriptor of the chain.
     next: *mut Descriptor,
-    // FIXME: Improve documentation, explain the magic number 0x2000_0000
     /// Length, in bytes, of the memory region described by `addr`.
+    ///
+    /// Bits [27:0] hold the byte count. Bit 29 (`DMA_REALIGN`) may be set to
+    /// instruct the pusher to realign output to the buffer start. Use the
+    /// [`sz`] helper to construct this field correctly.
     sz: u32,
-    // FIXME: Improve documentation, enum all possible tags.
-    /// DMA attribute / tag field.
+    /// DMA engine selector and transfer attributes for the cryptomaster.
+    ///
+    /// The low bits select which hardware engine receives the data (e.g. BA413
+    /// for SHA-2). Higher bits encode data type (header vs. payload), the
+    /// "last descriptor" flag, and optional byte-ignore counts. See the
+    /// `DMATAG_BA413_*` constants in `lib.rs` for the values used by this
+    /// driver.
     dmatag: u32,
 }
 
@@ -120,10 +142,13 @@ impl<const N: usize> DescriptorChain<N> {
     }
 }
 
-/// Asserts that size is a multiple of 4, and ORs in the DMA_REALIGN constant.
+/// Constructs a descriptor `sz` field from a byte count.
+///
+/// Asserts the count is a multiple of 4 (word-aligned), then ORs in
+/// [`DMA_REALIGN`] (bit 29) so the cryptomaster pusher realigns output to the
+/// buffer start.
 #[inline]
 pub(crate) const fn sz(n: usize) -> u32 {
-    const DMA_REALIGN: usize = 0x2000_0000;
     debug_assert!(
         n % 4 == 0,
         "Sizes passed through this function need to be in multiples of the word size"
