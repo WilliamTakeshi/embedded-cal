@@ -5,7 +5,7 @@
 #![no_std]
 
 use embedded_cal::{
-    Cal, HashProvider,
+    Cal, HashProvider, HmacProvider,
     plumbing::Plumbing,
     plumbing::hash::{SHA2SHORT_BLOCK_SIZE, Sha2Short, Sha2ShortVariant},
 };
@@ -123,7 +123,7 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
                         buffer,
                         instance,
                     };
-                    self.update(&mut rewrapped, &padding[..padding_size]);
+                    HashProvider::update(self, &mut rewrapped, &padding[..padding_size]);
                     let HashState::Sha256 {
                         instance, buffer, ..
                     } = rewrapped
@@ -268,6 +268,114 @@ impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {
         match self {
             HashResult::Sha256(data) => data.as_slice(),
             HashResult::Direct(result) => result.as_ref(),
+        }
+    }
+}
+
+/// HMAC algorithm identifier for software HMAC over [`Extender`].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum HmacAlgorithm {
+    HmacSha256,
+}
+
+impl embedded_cal::HmacAlgorithm for HmacAlgorithm {
+    fn len(&self) -> usize {
+        match self {
+            HmacAlgorithm::HmacSha256 => 32,
+        }
+    }
+
+    #[inline]
+    fn from_cose_number(number: impl Into<i128>) -> Option<Self> {
+        match number.into() {
+            5 => Some(HmacAlgorithm::HmacSha256),
+            _ => None,
+        }
+    }
+}
+
+pub enum HmacState<EC: ExtenderConfig> {
+    HmacSha256 {
+        /// Inner hash state accumulating `H((K XOR ipad) || message)`.
+        inner: HashState<EC>,
+        /// Key material XORed with opad, ready for the outer hash in `finalize`.
+        outer_key: [u8; SHA2SHORT_BLOCK_SIZE],
+    },
+}
+
+pub enum HmacResult {
+    HmacSha256([u8; 32]),
+}
+
+impl AsRef<[u8]> for HmacResult {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            HmacResult::HmacSha256(data) => data.as_slice(),
+        }
+    }
+}
+
+impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
+    type Algorithm = HmacAlgorithm;
+    type HmacState = HmacState<EC>;
+    type HmacResult = HmacResult;
+
+    fn init(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState {
+        match algorithm {
+            HmacAlgorithm::HmacSha256 => {
+                // Normalise key to exactly SHA2SHORT_BLOCK_SIZE bytes.
+                // If key is longer than the block size, hash it first (RFC 2104).
+                let mut key_block = [0u8; SHA2SHORT_BLOCK_SIZE];
+                if key.len() > SHA2SHORT_BLOCK_SIZE {
+                    let hashed = HashProvider::hash(self, HashAlgorithm::Sha256, key);
+                    key_block[..32].copy_from_slice(hashed.as_ref());
+                } else {
+                    key_block[..key.len()].copy_from_slice(key);
+                }
+
+                // outer_key = key_block XOR opad (0x5c)
+                let mut outer_key = [0u8; SHA2SHORT_BLOCK_SIZE];
+                for (o, &k) in outer_key.iter_mut().zip(key_block.iter()) {
+                    *o = k ^ 0x5c;
+                }
+
+                // ipad_block = key_block XOR ipad (0x36)
+                let mut ipad_block = [0u8; SHA2SHORT_BLOCK_SIZE];
+                for (i, &k) in ipad_block.iter_mut().zip(key_block.iter()) {
+                    *i = k ^ 0x36;
+                }
+
+                // Start inner hash: H((key XOR ipad) || ...)
+                let mut inner = HashProvider::init(self, HashAlgorithm::Sha256);
+                HashProvider::update(self, &mut inner, &ipad_block);
+
+                HmacState::HmacSha256 { inner, outer_key }
+            }
+        }
+    }
+
+    fn update(&mut self, state: &mut Self::HmacState, data: &[u8]) {
+        match state {
+            HmacState::HmacSha256 { inner, .. } => {
+                HashProvider::update(self, inner, data);
+            }
+        }
+    }
+
+    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+        match state {
+            HmacState::HmacSha256 { inner, outer_key } => {
+                // Finish inner hash, then compute outer: H(outer_key || inner_result)
+                let inner_result = HashProvider::finalize(self, inner);
+                let mut outer = HashProvider::init(self, HashAlgorithm::Sha256);
+                HashProvider::update(self, &mut outer, &outer_key);
+                HashProvider::update(self, &mut outer, inner_result.as_ref());
+                let outer_result = HashProvider::finalize(self, outer);
+
+                let mut output = [0u8; 32];
+                output.copy_from_slice(outer_result.as_ref());
+                HmacResult::HmacSha256(output)
+            }
         }
     }
 }
