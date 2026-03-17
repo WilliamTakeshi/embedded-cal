@@ -57,6 +57,24 @@ impl embedded_cal::HashProvider for Stm32wba55Cal {
     }
 }
 
+impl embedded_cal::HmacProvider for Stm32wba55Cal {
+    type Algorithm = embedded_cal::NoHmacAlgorithms;
+    type HmacState = embedded_cal::NoHmacAlgorithms;
+    type HmacResult = embedded_cal::NoHmacAlgorithms;
+
+    fn init(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::HmacState {
+        match algorithm {}
+    }
+
+    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
+        match *state {}
+    }
+
+    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+        match state {}
+    }
+}
+
 impl embedded_cal::plumbing::Plumbing for Stm32wba55Cal {}
 
 impl embedded_cal::plumbing::hash::Hash for Stm32wba55Cal {}
