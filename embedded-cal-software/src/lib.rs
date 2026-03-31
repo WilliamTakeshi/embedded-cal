@@ -37,7 +37,14 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
 
     fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
         match algorithm {
-            HashAlgorithm::Sha256 => HashState::Sha256 {
+            HashAlgorithm::Sha224 => HashState::Sha2Short {
+                variant: Sha2ShortVariant::Sha224,
+                written: 0,
+                buffer: [0; _],
+                instance: Sha2Short::init(&mut self.0, Sha2ShortVariant::Sha224),
+            },
+            HashAlgorithm::Sha256 => HashState::Sha2Short {
+                variant: Sha2ShortVariant::Sha256,
                 written: 0,
                 buffer: [0; _],
                 instance: Sha2Short::init(&mut self.0, Sha2ShortVariant::Sha256),
@@ -49,10 +56,11 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     fn update(&mut self, instance: &mut Self::HashState, mut data: &[u8]) {
         match instance {
             HashState::Direct(i) => HashProvider::update(&mut self.0, i, data),
-            HashState::Sha256 {
+            HashState::Sha2Short {
                 written,
                 buffer,
                 instance,
+                ..
             } => {
                 let mut written_in_buffer = *written;
                 // In the common case of this also being 64, the compiler has all it needs to fold
@@ -97,7 +105,8 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
             HashState::Direct(underlying) => {
                 HashResult::Direct(HashProvider::finalize(&mut self.0, underlying))
             }
-            HashState::Sha256 {
+            HashState::Sha2Short {
+                variant,
                 written,
                 buffer,
                 instance,
@@ -110,36 +119,46 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
                 written_in_buffer %= SHA2SHORT_BLOCK_SIZE;
                 // END FIXME
 
-                let (instance, buffer) = if <EC::Base as Sha2Short>::SEND_PADDING {
+                let (variant, instance, buffer) = if <EC::Base as Sha2Short>::SEND_PADDING {
                     let mut padding = [0; _];
                     let padding_size = sha256_padding(written, &mut padding);
-                    let mut rewrapped = HashState::Sha256 {
+                    let mut rewrapped = HashState::Sha2Short {
+                        variant,
                         written,
                         buffer,
                         instance,
                     };
                     self.update(&mut rewrapped, &padding[..padding_size]);
-                    let HashState::Sha256 {
-                        instance, buffer, ..
+                    let HashState::Sha2Short {
+                        variant,
+                        instance,
+                        buffer,
+                        ..
                     } = rewrapped
                     else {
                         unreachable!("Updating doesn't change the hash state type");
                     };
                     written_in_buffer = 0;
-                    // Actually buffer will be unused, but we still need to have something
-                    (instance, buffer)
+                    (variant, instance, buffer)
                 } else {
-                    (instance, buffer)
+                    (variant, instance, buffer)
                 };
 
-                let mut output = [0; 32];
+                let mut full_output = [0u8; 32];
                 Sha2Short::finalize(
                     &mut self.0,
                     instance,
                     &buffer[..written_in_buffer],
-                    &mut output,
+                    &mut full_output,
                 );
-                HashResult::Sha256(output)
+                match variant {
+                    Sha2ShortVariant::Sha224 => {
+                        let mut output = [0u8; 28];
+                        output.copy_from_slice(&full_output[..28]);
+                        HashResult::Sha224(output)
+                    }
+                    Sha2ShortVariant::Sha256 => HashResult::Sha256(full_output),
+                }
             }
         }
     }
@@ -148,6 +167,7 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
 pub enum HashAlgorithm<EC: ExtenderConfig> {
     // FIXME: Ideally we'd employ some witness type of <EC::Base as Sha2Short>::SUPPORTED
     // to render this uninhabited when unused.
+    Sha224,
     Sha256,
     Direct(<EC::Base as HashProvider>::Algorithm),
 }
@@ -158,6 +178,7 @@ pub enum HashAlgorithm<EC: ExtenderConfig> {
 impl<EC: ExtenderConfig> Clone for HashAlgorithm<EC> {
     fn clone(&self) -> Self {
         match self {
+            HashAlgorithm::Sha224 => HashAlgorithm::Sha224,
             HashAlgorithm::Sha256 => HashAlgorithm::Sha256,
             HashAlgorithm::Direct(a) => HashAlgorithm::Direct(a.clone()),
         }
@@ -168,6 +189,7 @@ impl<EC: ExtenderConfig> Clone for HashAlgorithm<EC> {
 impl<EC: ExtenderConfig> core::fmt::Debug for HashAlgorithm<EC> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            HashAlgorithm::Sha224 => write!(f, "Sha224"),
             HashAlgorithm::Sha256 => write!(f, "Sha256"),
             HashAlgorithm::Direct(arg0) => f.debug_tuple("Direct").field(arg0).finish(),
         }
@@ -179,6 +201,7 @@ impl<EC: ExtenderConfig> PartialEq for HashAlgorithm<EC> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (HashAlgorithm::Direct(l0), HashAlgorithm::Direct(r0)) => l0 == r0,
+            (HashAlgorithm::Sha224, HashAlgorithm::Sha224) => true,
             (HashAlgorithm::Sha256, HashAlgorithm::Sha256) => true,
             _ => false,
         }
@@ -191,6 +214,7 @@ impl<EC: ExtenderConfig> Eq for HashAlgorithm<EC> {}
 impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
     fn len(&self) -> usize {
         match self {
+            HashAlgorithm::Sha224 => 28,
             HashAlgorithm::Sha256 => 32,
             HashAlgorithm::Direct(a) => a.len(),
         }
@@ -211,6 +235,7 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
     fn from_ni_id(number: u8) -> Option<Self> {
         match number {
             1 => Self::from_cose_number(-16),
+            13 => Some(HashAlgorithm::Sha224),
             _ => None,
         }
     }
@@ -218,7 +243,8 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 
 pub enum HashState<EC: ExtenderConfig> {
     Direct(<EC::Base as HashProvider>::HashState),
-    Sha256 {
+    Sha2Short {
+        variant: Sha2ShortVariant,
         written: usize,
         // FIXME: would rely on const generic arguments, have to pick configurable maximum instead and
         // const assert on that fitting.
@@ -254,6 +280,7 @@ mod tests {
 }
 
 pub enum HashResult<EC: ExtenderConfig> {
+    Sha224([u8; 28]),
     Sha256([u8; 32]),
     Direct(<EC::Base as HashProvider>::HashResult),
 }
@@ -261,6 +288,7 @@ pub enum HashResult<EC: ExtenderConfig> {
 impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {
     fn as_ref(&self) -> &[u8] {
         match self {
+            HashResult::Sha224(data) => data.as_slice(),
             HashResult::Sha256(data) => data.as_slice(),
             HashResult::Direct(result) => result.as_ref(),
         }

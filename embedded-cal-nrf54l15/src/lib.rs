@@ -9,6 +9,10 @@ use crate::descriptor::sz;
 const MAX_DESCRIPTOR_CHAIN_LEN: usize = 4;
 const INTERNAL_STATE_LEN: usize = 32;
 
+/// CRACEN cryptomaster command byte, ref: nRF54L15 PS §X.Y
+const CRACEN_SHA224_CMD: u8 = 0x04;
+const CRACEN_SHA256_CMD: u8 = 0x08;
+
 pub struct Nrf54l15Cal {
     // FIXME: No need to enable and take ownership of everything
     // it's possible to have a more granular ownership
@@ -46,6 +50,7 @@ impl Drop for Nrf54l15Cal {
 }
 
 pub struct HashState {
+    variant: embedded_cal::plumbing::hash::Sha2ShortVariant,
     // We could instead make this unconditional and then set state (in init) to 0x6a, 0x09, 0xe6,
     // 0x67, ... (the big-endian version of the SHA256 starting points 0x6a09e667u32), but the
     // hardware has the values, so why not use them.
@@ -95,14 +100,10 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
     type State = HashState;
 
     fn init(&mut self, variant: embedded_cal::plumbing::hash::Sha2ShortVariant) -> Self::State {
-        match variant {
-            embedded_cal::plumbing::hash::Sha2ShortVariant::Sha256 => (),
-            // Although really all we need to support it is probably just copying the requested
-            // length into the output buffer
-            _ => todo!("Unsupported variant"),
-        };
-
-        Self::State { state: None }
+        Self::State {
+            variant,
+            state: None,
+        }
     }
 
     fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
@@ -113,7 +114,7 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
 
         let mut new_state: [u8; 32] = [0x00; 32];
 
-        let header: [u8; 4] = [0x08, 0x00, 0x00, 0x00];
+        let header: [u8; 4] = [variant_to_u8(&instance.variant), 0x00, 0x00, 0x00];
 
         let state_len = INTERNAL_STATE_LEN;
 
@@ -144,8 +145,18 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
             last_chunk.is_empty(),
             "Self::SEND_PADDING=true requires user not to send any last chunk"
         );
+        target.copy_from_slice(
+            &instance.state.expect(
+                "impossible to be None: SEND_PADDING=true guarantees at least one update call",
+            )[..target.len()],
+        );
+    }
+}
 
-        target.copy_from_slice(&instance.state.unwrap());
+fn variant_to_u8(variant: &embedded_cal::plumbing::hash::Sha2ShortVariant) -> u8 {
+    match variant {
+        embedded_cal::plumbing::hash::Sha2ShortVariant::Sha224 => CRACEN_SHA224_CMD,
+        embedded_cal::plumbing::hash::Sha2ShortVariant::Sha256 => CRACEN_SHA256_CMD,
     }
 }
 

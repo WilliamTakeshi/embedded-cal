@@ -1,6 +1,6 @@
 #[derive(PartialEq, Eq)]
 pub enum Sha2ShortVariant {
-    Sha244,
+    Sha224,
     Sha256,
 }
 
