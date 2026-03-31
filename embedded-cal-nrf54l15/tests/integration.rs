@@ -30,6 +30,15 @@ mod tests {
     }
 
     #[test]
+    fn test_hash_algorithm_sha224(state: &mut super::TestState) {
+        // FIXME: There is no SHA2-224 on IANA Named Information Hash Algorithm Registry
+        // embedded_cal::test_hash_algorithm_sha224::<
+        //     <Nrf54l15Cal as embedded_cal::HashProvider>::Algorithm,
+        // >();
+        testvectors::test_hash_algorithm_sha224(&mut state.cal);
+    }
+
+    #[test]
     fn test_hash_algorithm_sha256(state: &mut super::TestState) {
         embedded_cal::test_hash_algorithm_sha256::<
             <Nrf54l15Cal as embedded_cal::HashProvider>::Algorithm,
