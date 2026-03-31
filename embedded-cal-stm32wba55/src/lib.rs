@@ -11,6 +11,13 @@ pub struct Stm32wba55Cal {
 
 impl embedded_cal::Cal for Stm32wba55Cal {}
 
+fn variant_to_hw(variant: &embedded_cal::plumbing::hash::Sha2ShortVariant) -> u8 {
+    match variant {
+        embedded_cal::plumbing::hash::Sha2ShortVariant::Sha224 => 2,
+        embedded_cal::plumbing::hash::Sha2ShortVariant::Sha256 => 3,
+    }
+}
+
 impl Stm32wba55Cal {
     pub fn new(hash: hash::Hash, rcc: &rcc::Rcc) -> Self {
         // Enable HASH clock
@@ -20,13 +27,8 @@ impl Stm32wba55Cal {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum HashAlgorithm {
-    Sha256,
-}
-
 pub struct HashState {
-    _variant: embedded_cal::plumbing::hash::Sha2ShortVariant,
+    variant: embedded_cal::plumbing::hash::Sha2ShortVariant,
     context: Option<Context>,
 }
 
@@ -71,7 +73,7 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
 
     fn init(&mut self, variant: embedded_cal::plumbing::hash::Sha2ShortVariant) -> Self::State {
         Self::State {
-            _variant: variant,
+            variant,
             context: None,
         }
     }
@@ -80,11 +82,11 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
         // Reinitialize the HASH peripheral before processing new input
         self.hash.cr().write(|w| w.set_init(true));
         while self.hash.cr().read().init() {}
-        self.configure_and_reset_context(HashAlgorithm::Sha256);
+        self.configure_and_reset_context(&instance.variant);
 
         // Restore the previously saved intermediate state for non-initial blocks.
         if let Some(context) = &instance.context {
-            self.restore_context(context);
+            self.restore_context(context, &instance.variant);
         }
 
         // Hardware can only pause hashing after exactly NBWE (Number of words expected) words have been written.
@@ -106,12 +108,11 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
         self.hash.cr().write(|w| w.set_init(true));
         while self.hash.cr().read().init() {}
 
-        // Configure SHA-256
-        self.configure_and_reset_context(HashAlgorithm::Sha256);
+        self.configure_and_reset_context(&instance.variant);
 
         // Restore the previously saved intermediate state for non-initial blocks.
         if let Some(context) = &instance.context {
-            self.restore_context(context);
+            self.restore_context(context, &instance.variant);
         }
 
         for chunk in last_chunk.chunks(WORD_SIZE) {
@@ -138,7 +139,7 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
             hash_result[i * WORD_SIZE..(i + 1) * WORD_SIZE].copy_from_slice(&w.to_be_bytes());
         }
 
-        target.copy_from_slice(&hash_result[..32]);
+        target.copy_from_slice(&hash_result[..target.len()]);
     }
 }
 
@@ -165,7 +166,11 @@ impl Stm32wba55Cal {
     /// As documented in the HASH suspend/resume procedure.
     /// Used to resume processing of an interrupted message.
     /// https://www.st.com/resource/en/reference_manual/rm0493-multiprotocol-wireless-bluetooth-lowenergy-armbased-32bit-mcu-stmicroelectronics.pdf
-    fn restore_context(&mut self, ctx: &Context) {
+    fn restore_context(
+        &mut self,
+        ctx: &Context,
+        variant: &embedded_cal::plumbing::hash::Sha2ShortVariant,
+    ) {
         self.hash.cr().write(|w| w.set_init(false));
         // Restore IMR, STR (with INIT=0)
         self.hash.imr().write_value(ctx.imr);
@@ -173,7 +178,7 @@ impl Stm32wba55Cal {
         self.hash.cr().write(|w| {
             w.set_mode(false); // hash mode
             w.set_dmae(false);
-            w.set_algo(3); // SHA2-256
+            w.set_algo(variant_to_hw(variant));
             w.set_datatype(0)
         });
 
@@ -192,16 +197,17 @@ impl Stm32wba55Cal {
         while !self.hash.sr().read().dcis() {}
     }
 
-    fn configure_and_reset_context(&mut self, algo: HashAlgorithm) {
-        match algo {
-            HashAlgorithm::Sha256 => self.hash.cr().write(|w| {
-                w.set_mode(false); // hash mode
-                w.set_dmae(false);
-                w.set_algo(3); // SHA2-256
-                w.set_datatype(0);
-                w.set_init(true)
-            }),
-        };
+    fn configure_and_reset_context(
+        &mut self,
+        variant: &embedded_cal::plumbing::hash::Sha2ShortVariant,
+    ) {
+        self.hash.cr().write(|w| {
+            w.set_mode(false); // hash mode
+            w.set_dmae(false);
+            w.set_algo(variant_to_hw(variant));
+            w.set_datatype(0);
+            w.set_init(true)
+        });
     }
 
     fn read_digest(&mut self, out: &mut [u32; 8]) {

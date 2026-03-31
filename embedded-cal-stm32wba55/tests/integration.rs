@@ -28,6 +28,11 @@ mod tests {
     }
 
     #[test]
+    fn test_hash_algorithm_sha224(state: &mut super::TestState) {
+        testvectors::test_hash_algorithm_sha224(&mut state.cal);
+    }
+
+    #[test]
     fn test_hash_algorithm_sha256(state: &mut super::TestState) {
         embedded_cal::test_hash_algorithm_sha256::<
             <Stm32wba55Cal as embedded_cal::HashProvider>::Algorithm,
