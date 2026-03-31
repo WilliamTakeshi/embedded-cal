@@ -11,7 +11,7 @@ pub struct Stm32wba55Cal {
 
 impl embedded_cal::Cal for Stm32wba55Cal {}
 
-fn variant_to_hw(variant: &embedded_cal::plumbing::hash::Sha2ShortVariant) -> u8 {
+const fn variant_to_hw(variant: &embedded_cal::plumbing::hash::Sha2ShortVariant) -> u8 {
     match variant {
         embedded_cal::plumbing::hash::Sha2ShortVariant::Sha224 => 2,
         embedded_cal::plumbing::hash::Sha2ShortVariant::Sha256 => 3,
@@ -123,11 +123,12 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
             self.hash.din().write_value(word);
         }
 
-        let number_bytes_last_chunk = last_chunk.len() % WORD_SIZE;
+        let number_bytes_last_chunk = u8::try_from(last_chunk.len() % WORD_SIZE)
+            .expect("value is < WORD_SIZE (4), so it always fits in u8");
 
         self.hash
             .str()
-            .write(|w| w.set_nblw((number_bytes_last_chunk as u8) * 8));
+            .write(|w| w.set_nblw(number_bytes_last_chunk * 8));
         self.hash.str().write(|w| w.set_dcal(true));
 
         self.wait_busy();
@@ -147,7 +148,7 @@ impl Stm32wba55Cal {
     /// As documented in the HASH suspend/resume procedure.
     /// Used to suspend processing of the current message.
     /// https://www.st.com/resource/en/reference_manual/rm0493-multiprotocol-wireless-bluetooth-lowenergy-armbased-32bit-mcu-stmicroelectronics.pdf
-    fn save_context(&mut self, instance: &mut HashState) {
+    fn save_context(&self, instance: &mut HashState) {
         // BUSY must be 0
         while self.hash.sr().read().busy() {}
 
@@ -167,7 +168,7 @@ impl Stm32wba55Cal {
     /// Used to resume processing of an interrupted message.
     /// https://www.st.com/resource/en/reference_manual/rm0493-multiprotocol-wireless-bluetooth-lowenergy-armbased-32bit-mcu-stmicroelectronics.pdf
     fn restore_context(
-        &mut self,
+        &self,
         ctx: &Context,
         variant: &embedded_cal::plumbing::hash::Sha2ShortVariant,
     ) {
@@ -179,7 +180,7 @@ impl Stm32wba55Cal {
             w.set_mode(false); // hash mode
             w.set_dmae(false);
             w.set_algo(variant_to_hw(variant));
-            w.set_datatype(0)
+            w.set_datatype(0);
         });
 
         // Set INIT to reload STR/CR context into hardware
@@ -188,17 +189,17 @@ impl Stm32wba55Cal {
 
         // Restore CSR registers AFTER INIT has reinitialized the core
         for i in 0..CSR_REGS_LEN {
-            self.hash.csr(i).write_value(ctx.csr[i])
+            self.hash.csr(i).write_value(ctx.csr[i]);
         }
     }
 
-    fn wait_busy(&mut self) {
+    fn wait_busy(&self) {
         while self.hash.sr().read().busy() {}
         while !self.hash.sr().read().dcis() {}
     }
 
     fn configure_and_reset_context(
-        &mut self,
+        &self,
         variant: &embedded_cal::plumbing::hash::Sha2ShortVariant,
     ) {
         self.hash.cr().write(|w| {
@@ -206,11 +207,11 @@ impl Stm32wba55Cal {
             w.set_dmae(false);
             w.set_algo(variant_to_hw(variant));
             w.set_datatype(0);
-            w.set_init(true)
+            w.set_init(true);
         });
     }
 
-    fn read_digest(&mut self, out: &mut [u32; 8]) {
+    fn read_digest(&self, out: &mut [u32; 8]) {
         for i in 0..8 {
             out[i] = self.hash.hr(i).read();
         }
