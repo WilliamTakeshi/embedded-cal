@@ -30,6 +30,11 @@ mod tests {
     }
 
     #[test]
+    fn test_fill_bytes(state: &mut super::TestState) {
+        embedded_cal::test_fill_bytes(&mut state.cal);
+    }
+
+    #[test]
     fn test_hash_algorithm_sha256(state: &mut super::TestState) {
         embedded_cal::test_hash_algorithm_sha256::<
             <Nrf54l15Cal as embedded_cal::HashProvider>::Algorithm,

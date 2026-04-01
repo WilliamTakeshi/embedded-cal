@@ -6,6 +6,6 @@ mod rng;
 pub mod plumbing;
 
 pub use hash::{HashAlgorithm, HashProvider, NoHashAlgorithms, test_hash_algorithm_sha256};
-pub use rng::{RngError, RngProvider};
+pub use rng::{RngError, RngProvider, test_fill_bytes};
 
 pub trait Cal: HashProvider + RngProvider {}

@@ -27,16 +27,34 @@ impl Nrf54l15Cal {
             w.set_pkeikg(true)
         });
 
-        Self {
+        let nrf54 = Self {
             cracen,
             cracen_core,
-        }
+        };
+
+        // Enable the NDRNG once; it stays on until Drop.
+        nrf54
+            .cracen_core
+            .rngcontrol()
+            .control()
+            .modify(|w| w.set_enable(true));
+
+        // Discard the first FIFO word produced after the startup conditioning period
+        while nrf54.cracen_core.rngcontrol().fifolevel().read() == 0 {}
+        let _ = nrf54.cracen_core.rngcontrol().fifo(0).read();
+
+        nrf54
     }
 }
 
 impl Drop for Nrf54l15Cal {
     fn drop(&mut self) {
-        // Disable cryptomaster on drop
+        // Disable the NDRNG state machine before cutting CRACEN power.
+        self.cracen_core
+            .rngcontrol()
+            .control()
+            .modify(|w| w.set_enable(false));
+
         self.cracen.enable().write(|w| {
             w.set_cryptomaster(false);
             w.set_rng(false);
@@ -146,6 +164,83 @@ impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
         );
 
         target.copy_from_slice(&instance.state.unwrap());
+    }
+}
+
+impl embedded_cal::RngProvider for Nrf54l15Cal {
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.try_fill_bytes(dest)
+            .expect("RNG: unrecoverable seed error")
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), embedded_cal::RngError> {
+        use nrf_pac::cracencore::vals::{ControlSoftrst, State};
+
+        const MAX_TRNG_RESTARTS: u32 = 3;
+
+        let mut dest = dest;
+        let mut restarts: u32 = 0;
+
+        while !dest.is_empty() {
+            // Check the TRNG FSM state before waiting on the FIFO.
+            //
+            // The CRACEN TRNG can enter State::ERROR when its internal health
+            // tests detect degraded entropy (NIST repetition/proportion test
+            // failure, AIS31 noise alarm, or startup failure). In that state
+            // the FIFO stops refilling and spinning on fifolevel() forever
+            // produces a hang. The recovery sequence mirrors sx_trng_restart()
+            // in sdk-nrf: pulse softrst CTEST→NORMAL then re-assert enable.
+            //
+            // Unlike transient startup/fill states (RESET, STARTUP, FILLFIFO),
+            // ERROR indicates the noise source itself may be untrustworthy, so
+            // we bound restarts: after MAX_TRNG_RESTARTS we return Err(HardwareFailure)
+            // rather than looping forever or handing out potentially non-random bytes.
+            let fsm = self.cracen_core.rngcontrol().status().read().state();
+            if fsm == State::ERROR {
+                restarts += 1;
+                if restarts >= MAX_TRNG_RESTARTS {
+                    return Err(embedded_cal::RngError::HardwareFailure);
+                }
+                // Pulse softrst to flush the conditioner and FIFO, then re-enable.
+                self.cracen_core
+                    .rngcontrol()
+                    .control()
+                    .modify(|w| w.set_softrst(ControlSoftrst::CTEST));
+                self.cracen_core
+                    .rngcontrol()
+                    .control()
+                    .modify(|w| w.set_softrst(ControlSoftrst::NORMAL));
+                self.cracen_core
+                    .rngcontrol()
+                    .control()
+                    .modify(|w| w.set_enable(true));
+                continue;
+            }
+
+            let level = loop {
+                let l = self.cracen_core.rngcontrol().fifolevel().read() as usize;
+                if l > 0 {
+                    break l;
+                }
+                core::hint::spin_loop();
+            };
+
+            for _ in 0..level {
+                if dest.is_empty() {
+                    break;
+                }
+
+                // Always read fifo(0). The FIFO is a pop-on-read register; each read
+                // advances the hardware read pointer.
+                // based on `cracen_get_random` from sdk-nrf C implementation
+                let bytes = self.cracen_core.rngcontrol().fifo(0).read().to_le_bytes();
+                let take = dest.len().min(4);
+                dest[..take].copy_from_slice(&bytes[..take]);
+                dest = &mut dest[take..];
+            }
+        }
+
+        Ok(())
     }
 }
 

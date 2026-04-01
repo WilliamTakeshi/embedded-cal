@@ -33,3 +33,35 @@ pub trait RngProvider {
         u64::from_le_bytes(bytes)
     }
 }
+
+pub fn test_fill_bytes<R: RngProvider>(rng: &mut R) {
+    // Zero-length fill must not panic
+    rng.fill_bytes(&mut []);
+
+    // Single-byte fill exercises the take=1 path
+    let mut one = [0u8; 1];
+    rng.fill_bytes(&mut one);
+
+    // Basic fill: output should not be all zeros
+    let mut buf = [0u8; 32];
+    rng.fill_bytes(&mut buf);
+    assert!(buf.iter().any(|&b| b != 0));
+
+    // Two consecutive fills should differ
+    let mut buf2 = [0u8; 32];
+    rng.fill_bytes(&mut buf2);
+    assert_ne!(buf, buf2);
+
+    // Non-multiple-of-4 length exercises the partial last word path
+    let mut buf3 = [0u8; 15];
+    rng.fill_bytes(&mut buf3);
+    assert!(buf3.iter().any(|&b| b != 0));
+
+    // Fill larger than a typical FIFO depth (>64 bytes) exercises multi-iteration draining
+    let mut large = [0u8; 128];
+    rng.fill_bytes(&mut large);
+    assert!(large.iter().any(|&b| b != 0));
+
+    let _ = rng.next_u32();
+    let _ = rng.next_u64();
+}
