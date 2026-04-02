@@ -52,6 +52,12 @@ impl AsRef<[u8]> for HashResult {
     }
 }
 
+impl embedded_cal::RngProvider for RustcryptoCal {
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), embedded_cal::RngError> {
+        todo!("software RNG not yet implemented")
+    }
+}
+
 impl embedded_cal::HashProvider for RustcryptoCal {
     type Algorithm = HashAlgorithm;
     type HashState = HashState;

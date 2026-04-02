@@ -5,7 +5,7 @@
 #![no_std]
 
 use embedded_cal::{
-    Cal, HashProvider,
+    Cal, HashProvider, RngProvider,
     plumbing::Plumbing,
     plumbing::hash::{SHA2SHORT_BLOCK_SIZE, Sha2Short, Sha2ShortVariant},
 };
@@ -27,6 +27,16 @@ pub struct Extender<EC: ExtenderConfig>(EC::Base);
 const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 
 impl<EC: ExtenderConfig> embedded_cal::Cal for Extender<EC> {}
+
+impl<EC: ExtenderConfig> RngProvider for Extender<EC> {
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.0.fill_bytes(dest)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), embedded_cal::RngError> {
+        self.0.try_fill_bytes(dest)
+    }
+}
 
 impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     type Algorithm = HashAlgorithm<EC>;

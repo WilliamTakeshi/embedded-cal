@@ -20,11 +20,19 @@ mod tests {
     use embedded_cal_stm32wba55::Stm32wba55Cal;
     #[init]
     fn init() -> super::TestState {
-        let base =
-            embedded_cal_stm32wba55::Stm32wba55Cal::new(stm32_metapac::HASH, &stm32_metapac::RCC);
+        let base = embedded_cal_stm32wba55::Stm32wba55Cal::new(
+            stm32_metapac::HASH,
+            stm32_metapac::RNG,
+            &stm32_metapac::RCC,
+        );
 
         let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
         super::TestState { cal }
+    }
+
+    #[test]
+    fn test_fill_bytes(state: &mut super::TestState) {
+        embedded_cal::test_fill_bytes(&mut state.cal);
     }
 
     #[test]
