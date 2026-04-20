@@ -1089,9 +1089,12 @@ version = "0.1.0"
 dependencies = [
  "ariel-os",
  "ariel-os-boards",
+ "embassy-stm32",
  "embedded-cal",
  "embedded-cal-rustcrypto",
  "embedded-cal-software",
+ "embedded-cal-stm32wba55",
+ "stm32-metapac",
  "testvectors",
 ]
 
@@ -1110,6 +1113,14 @@ name = "embedded-cal-software"
 version = "0.1.0"
 dependencies = [
  "embedded-cal",
+]
+
+[[package]]
+name = "embedded-cal-stm32wba55"
+version = "0.1.0"
+dependencies = [
+ "embedded-cal",
+ "stm32-metapac",
 ]
 
 [[package]]
