@@ -13,6 +13,12 @@ testvectors = { path = "../testvectors/" }
 # for configured_cal
 embedded-cal-software = { path = "../embedded-cal-software/" }
 embedded-cal-rustcrypto = { path = "../embedded-cal-rustcrypto/" }
+embedded-cal-stm32wba55 = { path = "../embedded-cal-stm32wba55/", optional = true }
+embassy-stm32 = { version = "*", optional = true }
+stm32-metapac = { version = "*", optional = true }
+
+[features]
+embedded-cal-stm32wba55 = ["dep:embedded-cal-stm32wba55", "embassy-stm32", "stm32-metapac"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

@@ -5,14 +5,14 @@ use ariel_os::debug::{ExitCode, exit, log::info};
 
 mod configured_cal;
 
-#[ariel_os::task(autostart)]
-async fn main() {
+#[ariel_os::task(autostart, peripherals)]
+async fn main(peripherals: configured_cal::Peripherals) {
     info!(
         "Running tests for embedded-cal on a {} board.",
         ariel_os::buildinfo::BOARD
     );
 
-    let mut cal = configured_cal::cal();
+    let mut cal = configured_cal::cal(peripherals);
 
     info!(
         "Running on a Cal instance of type {}",
