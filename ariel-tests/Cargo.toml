@@ -1,0 +1,20 @@
+[package]
+name = "embedded-cal-ariel-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ariel-os = { path = "build/imports/ariel-os/src/ariel-os", features = [] }
+ariel-os-boards = { path = "build/imports/ariel-os/src/ariel-os-boards" }
+
+embedded-cal = { path = "../embedded-cal/" }
+testvectors = { path = "../testvectors/" }
+
+# for configured_cal
+embedded-cal-software = { path = "../embedded-cal-software/" }
+embedded-cal-rustcrypto = { path = "../embedded-cal-rustcrypto/" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(context, values(any()))',
+] }
