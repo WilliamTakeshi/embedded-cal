@@ -52,6 +52,8 @@ impl AsRef<[u8]> for HashResult {
     }
 }
 
+impl embedded_cal::Cal for RustcryptoCal {}
+
 impl embedded_cal::HashProvider for RustcryptoCal {
     type Algorithm = HashAlgorithm;
     type HashState = HashState;
