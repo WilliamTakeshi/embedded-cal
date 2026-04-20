@@ -1,3 +1,5 @@
+#![no_std]
+
 use digest::Digest;
 
 pub struct RustcryptoCal;
