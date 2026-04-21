@@ -12,3 +12,4 @@ version.workspace = true
 
 [dependencies]
 hax-lib.workspace = true
+rand_core.workspace = true

@@ -21,6 +21,7 @@ harness = false
 [dependencies]
 embedded-cal.path = "../embedded-cal"
 stm32-metapac = { version = "18.0", features = ["stm32wba55cg", "rt"] }
+rand_core.workspace = true
 
 [dev-dependencies]
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }

@@ -5,7 +5,7 @@
 #![no_std]
 
 use embedded_cal::{
-    Cal, HashProvider, TryRng,
+    Cal, HashProvider,
     plumbing::{
         Plumbing,
         hash::{SHA2SHORT_BLOCK_SIZE, Sha2Short, Sha2ShortVariant},
@@ -30,11 +30,16 @@ const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 
 impl<EC: ExtenderConfig> embedded_cal::Cal for Extender<EC> {}
 
-impl<EC: ExtenderConfig> embedded_cal::TryRng for Extender<EC>
-where
-    EC::Base: TryRng,
+impl<EC: ExtenderConfig> rand_core::TryCryptoRng for Extender<EC> where
+    EC::Base: rand_core::TryCryptoRng
 {
-    type Error = <EC::Base as TryRng>::Error;
+}
+
+impl<EC: ExtenderConfig> rand_core::TryRng for Extender<EC>
+where
+    EC::Base: rand_core::TryRng,
+{
+    type Error = <EC::Base as rand_core::TryRng>::Error;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         self.0.try_next_u32()

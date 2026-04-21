@@ -21,7 +21,8 @@ impl core::fmt::Display for RngError {
 
 impl core::error::Error for RngError {}
 
-impl embedded_cal::TryRng for Stm32wba55Cal {
+impl rand_core::TryCryptoRng for Stm32wba55Cal {}
+impl rand_core::TryRng for Stm32wba55Cal {
     type Error = RngError;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {

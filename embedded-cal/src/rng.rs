@@ -1,13 +1,4 @@
-// Based on rand_core::TryRng
-pub trait TryRng {
-    type Error: core::error::Error;
-
-    fn try_next_u32(&mut self) -> Result<u32, Self::Error>;
-    fn try_next_u64(&mut self) -> Result<u64, Self::Error>;
-    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error>;
-}
-
-pub fn test_tryrng<R: TryRng>(rng: &mut R) {
+pub fn test_tryrng<R: rand_core::TryCryptoRng>(rng: &mut R) {
     // Zero-length fill must not panic
     rng.try_fill_bytes(&mut []).unwrap();
 

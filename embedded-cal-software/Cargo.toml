@@ -10,6 +10,7 @@ version.workspace = true
 
 [dependencies]
 embedded-cal = { version = "0.1.0", path = "../embedded-cal" }
+rand_core.workspace = true
 
 [dev-dependencies]
 testvectors.path = "../testvectors"
