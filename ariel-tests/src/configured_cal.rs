@@ -20,6 +20,12 @@ pub fn cal(peripherals: Peripherals) -> impl embedded_cal::Cal {
         feature = "embedded-cal-stm32wba55" => {
             use embassy_stm32::{bind_interrupts, hash, peripherals};
 
+            struct ImplementSha256Short;
+            impl embedded_cal_software::ExtenderConfig for ImplementSha256Short {
+                const IMPLEMENT_SHA2SHORT: bool = true;
+                type Base = embedded_cal_stm32wba55::Stm32wba55Cal;
+            }
+
             bind_interrupts!(struct Irqs {
                 HASH => hash::InterruptHandler<peripherals::HASH>;
             });
@@ -40,7 +46,8 @@ pub fn cal(peripherals: Peripherals) -> impl embedded_cal::Cal {
             // underlying one, so we're exclusive users.
             let hash = unsafe { stm32_metapac::HASH };
             // When we set up blocking(), the clock got turned on.
-            embedded_cal_stm32wba55::Stm32wba55Cal::new_with_hash_clock_enabled(hash)
+            let base = embedded_cal_stm32wba55::Stm32wba55Cal::new_with_hash_clock_enabled(hash);
+            embedded_cal_software::Extender::<ImplementSha256Short>::new(base)
         },
         _ => {
             let _ = peripherals;
