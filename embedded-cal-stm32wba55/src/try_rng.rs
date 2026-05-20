@@ -1,5 +1,6 @@
-use crate::Stm32wba55Cal;
+use crate::inner::Stm32wba55CalInner;
 const MAX_SEED_RETRIES: u32 = 3;
+const WORD_SIZE: usize = 4;
 
 /// Error returned by [`RngProvider::try_fill_bytes`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,8 +22,8 @@ impl core::fmt::Display for RngError {
 
 impl core::error::Error for RngError {}
 
-impl rand_core::TryCryptoRng for Stm32wba55Cal {}
-impl rand_core::TryRng for Stm32wba55Cal {
+impl rand_core::TryCryptoRng for Stm32wba55CalInner {}
+impl rand_core::TryRng for Stm32wba55CalInner {
     type Error = RngError;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
@@ -72,7 +73,7 @@ impl rand_core::TryRng for Stm32wba55Cal {
 
             if sr.drdy() {
                 let bytes = self.rng.dr().read().to_le_bytes();
-                let take = dst.len().min(crate::WORD_SIZE);
+                let take = dst.len().min(WORD_SIZE);
                 dst[..take].copy_from_slice(&bytes[..take]);
                 dst = &mut dst[take..];
                 seed_errors = 0;

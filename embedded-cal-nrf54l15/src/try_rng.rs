@@ -1,4 +1,4 @@
-use crate::Nrf54l15Cal;
+use crate::inner::Nrf54l15CalInner;
 use nrf_pac::cracencore::vals::{ControlSoftrst, State};
 const MAX_TRNG_RESTARTS: u32 = 3;
 
@@ -22,8 +22,8 @@ impl core::fmt::Display for RngError {
 
 impl core::error::Error for RngError {}
 
-impl rand_core::TryCryptoRng for Nrf54l15Cal {}
-impl rand_core::TryRng for Nrf54l15Cal {
+impl rand_core::TryCryptoRng for Nrf54l15CalInner {}
+impl rand_core::TryRng for Nrf54l15CalInner {
     type Error = RngError;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
