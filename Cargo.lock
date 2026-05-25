@@ -197,6 +197,7 @@ name = "embedded-cal"
 version = "0.1.0"
 dependencies = [
  "hax-lib",
+ "rand_core",
 ]
 
 [[package]]
@@ -212,6 +213,7 @@ dependencies = [
  "embedded-cal-software",
  "nrf-pac",
  "panic-probe",
+ "rand_core",
  "testvectors",
 ]
 
@@ -230,6 +232,7 @@ name = "embedded-cal-software"
 version = "0.1.0"
 dependencies = [
  "embedded-cal",
+ "rand_core",
  "testvectors",
 ]
 
@@ -245,6 +248,7 @@ dependencies = [
  "embedded-cal",
  "embedded-cal-software",
  "panic-probe",
+ "rand_core",
  "stm32-metapac",
  "testvectors",
 ]
@@ -469,6 +473,12 @@ name = "r-efi"
 version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
+
+[[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rustc_version"

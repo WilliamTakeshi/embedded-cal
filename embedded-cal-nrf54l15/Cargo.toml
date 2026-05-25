@@ -21,6 +21,7 @@ harness = false
 [dependencies]
 embedded-cal.path = "../embedded-cal"
 nrf-pac = { version = "0.2.0", features = ["nrf54l15-app", "rt"] }
+rand_core.workspace = true
 
 [dev-dependencies]
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
