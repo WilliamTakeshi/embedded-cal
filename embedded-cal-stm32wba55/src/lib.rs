@@ -173,6 +173,7 @@ impl embedded_cal::HmacAlgorithm for HmacAlgorithm {
 }
 
 /// State for an in-progress HMAC-SHA256 operation.
+#[derive(Clone)]
 pub struct HmacState {
     /// Saved HASH hardware context (captured after each block written to hardware).
     context: Option<Context>,
@@ -196,10 +197,11 @@ impl AsRef<[u8]> for HmacResult {
 
 impl embedded_cal::HmacProvider for Stm32wba55Cal {
     type Algorithm = HmacAlgorithm;
+    type Key = HmacState;
     type HmacState = HmacState;
     type HmacResult = HmacResult;
 
-    fn init_with_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState {
+    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
         match algorithm {
             HmacAlgorithm::HmacSha256 => {
                 // Normalise key: zero-pad short keys; hash long keys per RFC 2104.
@@ -243,6 +245,10 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
                 }
             }
         }
+    }
+
+    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+        key
     }
 
     fn update(&mut self, state: &mut Self::HmacState, data: &[u8]) {

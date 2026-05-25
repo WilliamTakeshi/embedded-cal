@@ -99,11 +99,16 @@ impl embedded_cal::HashProvider for Nrf54l15Cal {
 
 impl embedded_cal::HmacProvider for Nrf54l15Cal {
     type Algorithm = embedded_cal::NoHmacAlgorithms;
+    type Key = embedded_cal::NoHmacAlgorithms;
     type HmacState = embedded_cal::NoHmacAlgorithms;
     type HmacResult = embedded_cal::NoHmacAlgorithms;
 
-    fn init_with_keydata(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::HmacState {
+    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::Key {
         match algorithm {}
+    }
+
+    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+        key
     }
 
     fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
