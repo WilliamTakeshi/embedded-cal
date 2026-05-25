@@ -26,10 +26,17 @@ mod tests {
         // stm32_metapac::HASH is a `const`, so it can be used at two sites
         // without conflict; both values alias the same hardware register block.
         // Tests run sequentially so there is no concurrent access.
-        let raw =
-            embedded_cal_stm32wba55::Stm32wba55Cal::new(stm32_metapac::HASH, &stm32_metapac::RCC);
-        let base =
-            embedded_cal_stm32wba55::Stm32wba55Cal::new(stm32_metapac::HASH, &stm32_metapac::RCC);
+        let raw = embedded_cal_stm32wba55::Stm32wba55Cal::new(
+            stm32_metapac::HASH,
+            stm32_metapac::RCC,
+            stm32_metapac::RNG,
+        );
+        let base = embedded_cal_stm32wba55::Stm32wba55Cal::new(
+            stm32_metapac::HASH,
+            stm32_metapac::RCC,
+            stm32_metapac::RNG,
+        );
+
         let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
         super::TestState { cal, raw }
     }
@@ -49,5 +56,10 @@ mod tests {
         >();
         // Runs directly against the hardware HMAC accelerator (MODE=1 in HASH_CR).
         testvectors::test_hmac_sha256(&mut state.raw);
+    }
+
+    #[test]
+    fn test_tryrng(state: &mut super::TestState) {
+        embedded_cal::test_tryrng(&mut state.cal);
     }
 }
