@@ -5,6 +5,7 @@
 #![no_std]
 
 mod hkdf;
+pub use hkdf::{HkdfAlgorithm, HkdfState, PrkResult};
 
 use embedded_cal::{
     HashProvider, HmacProvider,
@@ -430,5 +431,12 @@ mod tests {
         let mut cal = Extender::<ImplementSha256Short>(dummy_sha256::DummySha256);
 
         testvectors::test_hmac_sha256(&mut cal);
+    }
+
+    #[test]
+    fn test_hkdf_sha256_on_dummy() {
+        let mut cal = Extender::<ImplementSha256Short>(dummy_sha256::DummySha256);
+
+        testvectors::test_hkdf_sha256(&mut cal);
     }
 }

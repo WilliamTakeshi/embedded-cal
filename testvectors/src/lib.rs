@@ -117,6 +117,99 @@ pub fn test_hmac_sha256<Cal: embedded_cal::HmacProvider>(cal: &mut Cal) {
     }
 }
 
+/// HKDF-SHA-256 test vectors from RFC 5869 Appendix A (test cases 1, 2, and 3).
+pub struct HkdfVector {
+    pub ikm: &'static [u8],
+    /// `None` triggers the all-zeros default salt (RFC 5869 §2.2).
+    pub salt: Option<&'static [u8]>,
+    pub info: &'static [u8],
+    pub l: usize,
+    pub prk: &'static [u8],
+    pub okm: &'static [u8],
+}
+
+pub const HKDF_SHA256_VECTORS: &[HkdfVector] = &[
+    // A.1 — basic case, salt provided
+    HkdfVector {
+        ikm: &hex!("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
+        salt: Some(&hex!("000102030405060708090a0b0c")),
+        info: &hex!("f0f1f2f3f4f5f6f7f8f9"),
+        l: 42,
+        prk: &hex!("077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5"),
+        okm: &hex!(
+            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+        ),
+    },
+    // A.2 — longer inputs
+    HkdfVector {
+        ikm: &hex!(
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f"
+        ),
+        salt: Some(&hex!(
+            "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
+        )),
+        info: &hex!(
+            "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+        ),
+        l: 82,
+        prk: &hex!("06a6b88c5853361a06104c9ceb35b45cef760014904671014a193f40c15fc244"),
+        okm: &hex!(
+            "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
+        ),
+    },
+    // A.3 — no salt (defaults to 32 zero bytes), empty info
+    HkdfVector {
+        ikm: &hex!("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
+        salt: None,
+        info: b"",
+        l: 42,
+        prk: &hex!("19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c293ccb04"),
+        okm: &hex!(
+            "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+        ),
+    },
+];
+
+/// Test HKDF-SHA-256 against all RFC 5869 Appendix A vectors.
+///
+/// Exercises `hkdf_extract` (PRK check), `hkdf_expand` (OKM check),
+/// the `hkdf_new` convenience path, and `hkdf_from_prk`.
+pub fn test_hkdf_sha256<Cal: embedded_cal::HkdfProvider>(cal: &mut Cal) {
+    use embedded_cal::HkdfAlgorithm;
+
+    let hkdf_sha256 = Cal::Algorithm::from_cose_number(-13i8)
+        .expect("HkdfProvider must recognize COSE -13 (HKDF-SHA-256)");
+
+    // Stack buffer sized for the largest OKM across all vectors (82 bytes for A.2).
+    let mut buf = [0u8; 82];
+
+    for v in HKDF_SHA256_VECTORS {
+        // --- hkdf_extract + hkdf_expand ---
+        let (prk, state) = cal.hkdf_extract(hkdf_sha256.clone(), v.salt, v.ikm);
+        assert_eq!(prk.as_ref(), v.prk, "PRK mismatch");
+        let okm = &mut buf[..v.l];
+        cal.hkdf_expand(&state, v.info, okm)
+            .expect("hkdf_expand failed");
+        assert_eq!(&*okm, v.okm, "OKM mismatch (via hkdf_extract)");
+
+        // --- hkdf_new + hkdf_expand (convenience path, no PRK exposed) ---
+        let state = cal.hkdf_new(hkdf_sha256.clone(), v.salt, v.ikm);
+        let okm = &mut buf[..v.l];
+        cal.hkdf_expand(&state, v.info, okm)
+            .expect("hkdf_expand failed");
+        assert_eq!(&*okm, v.okm, "OKM mismatch (via hkdf_new)");
+
+        // --- hkdf_from_prk + hkdf_expand (import external PRK) ---
+        let state = cal
+            .hkdf_from_prk(hkdf_sha256.clone(), v.prk)
+            .expect("hkdf_from_prk failed");
+        let okm = &mut buf[..v.l];
+        cal.hkdf_expand(&state, v.info, okm)
+            .expect("hkdf_expand failed");
+        assert_eq!(&*okm, v.okm, "OKM mismatch (via hkdf_from_prk)");
+    }
+}
+
 pub fn test_hash_algorithm_sha256<Cal: embedded_cal::HashProvider>(cal: &mut Cal) {
     // Equivalence with other constructors can be handled via
     // embedded_cal::test_hash_algorithm_sha256 (or should we move this in here?)
