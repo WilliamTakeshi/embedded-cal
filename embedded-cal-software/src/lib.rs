@@ -4,6 +4,8 @@
 //! only does the hard work of the SHA hashes and not the clerical buffering / padding.
 #![no_std]
 
+mod hkdf;
+
 use embedded_cal::{
     HashProvider, HmacProvider,
     plumbing::Plumbing,

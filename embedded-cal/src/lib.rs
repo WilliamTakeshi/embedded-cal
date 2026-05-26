@@ -1,11 +1,13 @@
 #![no_std]
 
 mod hash;
+mod hkdf;
 mod hmac;
 // FIXME: Once we start API stability, this should be a dedicated crate.
 pub mod plumbing;
 
 pub use hash::{HashAlgorithm, HashProvider, NoHashAlgorithms, test_hash_algorithm_sha256};
+pub use hkdf::{HkdfAlgorithm, HkdfError, HkdfProvider, NoHkdfAlgorithms};
 pub use hmac::{HmacAlgorithm, HmacProvider, NoHmacAlgorithms, test_hmac_algorithm_hmacsha256};
 
-pub trait Cal: HashProvider + HmacProvider {}
+pub trait Cal: HashProvider + HmacProvider + HkdfProvider {}
