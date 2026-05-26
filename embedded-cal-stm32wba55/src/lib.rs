@@ -13,7 +13,6 @@ pub struct Stm32wba55Cal {
     hash: hash::Hash,
 }
 
-impl embedded_cal::Cal for Stm32wba55Cal {}
 
 impl Stm32wba55Cal {
     pub fn new(hash: hash::Hash, rcc: &rcc::Rcc) -> Self {

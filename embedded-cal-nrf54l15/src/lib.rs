@@ -13,6 +13,47 @@ pub struct Nrf54l15Cal {
     cracen_core: cracencore::Cracencore,
 }
 
+impl embedded_cal::HkdfProvider for Nrf54l15Cal {
+    type Algorithm = embedded_cal::NoHkdfAlgorithms;
+    type HkdfState = embedded_cal::NoHkdfAlgorithms;
+    type PrkResult = embedded_cal::NoHkdfAlgorithms;
+
+    fn hkdf_new(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _salt: Option<&[u8]>,
+        _ikm: &[u8],
+    ) -> Self::HkdfState {
+        match algorithm {}
+    }
+
+    fn hkdf_extract(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _salt: Option<&[u8]>,
+        _ikm: &[u8],
+    ) -> (Self::PrkResult, Self::HkdfState) {
+        match algorithm {}
+    }
+
+    fn hkdf_from_prk(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _prk: &[u8],
+    ) -> Result<Self::HkdfState, embedded_cal::HkdfError> {
+        match algorithm {}
+    }
+
+    fn hkdf_expand(
+        &mut self,
+        state: &Self::HkdfState,
+        _info: &[u8],
+        _okm: &mut [u8],
+    ) -> Result<(), embedded_cal::HkdfError> {
+        match *state {}
+    }
+}
+
 impl embedded_cal::Cal for Nrf54l15Cal {}
 
 impl Nrf54l15Cal {

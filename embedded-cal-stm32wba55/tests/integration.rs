@@ -15,6 +15,8 @@ struct TestState {
     cal: embedded_cal_software::Extender<ImplementSha256Short>,
     /// Raw STM32WBA55 CAL used to exercise the hardware HMAC accelerator directly.
     raw: embedded_cal_stm32wba55::Stm32wba55Cal,
+    /// Software HKDF over the hardware HMAC accelerator.
+    hkdf: embedded_cal_software::SoftwareHkdf<embedded_cal_stm32wba55::Stm32wba55Cal>,
 }
 
 #[defmt_test::tests]
@@ -31,7 +33,10 @@ mod tests {
         let base =
             embedded_cal_stm32wba55::Stm32wba55Cal::new(stm32_metapac::HASH, &stm32_metapac::RCC);
         let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
-        super::TestState { cal, raw }
+        let hkdf = embedded_cal_software::SoftwareHkdf(
+            embedded_cal_stm32wba55::Stm32wba55Cal::new(stm32_metapac::HASH, &stm32_metapac::RCC),
+        );
+        super::TestState { cal, raw, hkdf }
     }
 
     #[test]
@@ -49,5 +54,11 @@ mod tests {
         >();
         // Runs directly against the hardware HMAC accelerator (MODE=1 in HASH_CR).
         testvectors::test_hmac_sha256(&mut state.raw);
+    }
+
+    #[test]
+    fn test_hkdf_sha256(state: &mut super::TestState) {
+        // Software HKDF over the hardware HMAC accelerator.
+        testvectors::test_hkdf_sha256(&mut state.hkdf);
     }
 }

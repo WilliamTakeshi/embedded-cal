@@ -5,7 +5,7 @@
 #![no_std]
 
 mod hkdf;
-pub use hkdf::{HkdfAlgorithm, HkdfState, PrkResult};
+pub use hkdf::{HkdfAlgorithm, HkdfState, PrkResult, SoftwareHkdf};
 
 use embedded_cal::{
     HashProvider, HmacProvider,
@@ -30,6 +30,8 @@ pub struct Extender<EC: ExtenderConfig>(EC::Base);
 const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 
 impl<EC: ExtenderConfig> embedded_cal::Cal for Extender<EC> {}
+
+impl<H: HashProvider + HmacProvider> embedded_cal::Cal for hkdf::SoftwareHkdf<H> {}
 
 impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     type Algorithm = HashAlgorithm<EC>;

@@ -44,4 +44,9 @@ mod tests {
         >();
         testvectors::test_hmac_sha256(&mut state.cal);
     }
+
+    #[test]
+    fn test_hkdf_sha256(state: &mut super::TestState) {
+        testvectors::test_hkdf_sha256(&mut state.cal);
+    }
 }
