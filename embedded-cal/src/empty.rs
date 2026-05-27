@@ -87,6 +87,47 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
+impl<const PLUMBING: bool> HkdfProvider for EmptyCal<PLUMBING> {
+    type Algorithm = NoAlgorithms;
+    type HkdfState = NoAlgorithms;
+    type PrkResult = NoAlgorithms;
+
+    fn hkdf_new(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _salt: Option<&[u8]>,
+        _ikm: &[u8],
+    ) -> Self::HkdfState {
+        match algorithm {}
+    }
+
+    fn hkdf_extract(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _salt: Option<&[u8]>,
+        _ikm: &[u8],
+    ) -> (Self::PrkResult, Self::HkdfState) {
+        match algorithm {}
+    }
+
+    fn hkdf_from_prk(
+        &mut self,
+        algorithm: Self::Algorithm,
+        _prk: &[u8],
+    ) -> Result<Self::HkdfState, HkdfError> {
+        match algorithm {}
+    }
+
+    fn hkdf_expand(
+        &mut self,
+        state: &Self::HkdfState,
+        _info: &[u8],
+        _okm: &mut [u8],
+    ) -> Result<(), HkdfError> {
+        match *state {}
+    }
+}
+
 impl<const PLUMBING: bool> rand_core::TryCryptoRng for EmptyCal<PLUMBING> {}
 
 impl<const PLUMBING: bool> rand_core::TryRng for EmptyCal<PLUMBING> {
@@ -161,6 +202,16 @@ impl HashAlgorithm for NoAlgorithms {
 impl HmacAlgorithm for NoAlgorithms {
     fn len(&self) -> usize {
         match *self {}
+    }
+}
+
+impl HkdfAlgorithm for NoAlgorithms {
+    fn hash_len(&self) -> usize {
+        match *self {}
+    }
+
+    fn from_cose_number(_number: impl Into<i128>) -> Option<Self> {
+        None
     }
 }
 
