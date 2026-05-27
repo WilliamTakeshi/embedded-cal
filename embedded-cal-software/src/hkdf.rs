@@ -123,3 +123,23 @@ impl<EC: ExtenderConfig> HkdfProvider for Extender<EC> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::tests::dummy_sha256;
+
+    struct ImplementSha256Short;
+
+    impl ExtenderConfig for ImplementSha256Short {
+        const IMPLEMENT_SHA2SHORT: bool = true;
+        type Base = dummy_sha256::DummySha256;
+    }
+
+    #[test]
+    fn test_hkdf_sha256_on_dummy() {
+        let mut cal = Extender::<ImplementSha256Short>(dummy_sha256::DummySha256);
+
+        testvectors::test_hkdf_sha256(&mut cal);
+    }
+}
