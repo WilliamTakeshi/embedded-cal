@@ -1,0 +1,47 @@
+//! All the impls of Cal that `DummnySha256` does *not* really provide.
+//!
+//! (This should be small enough to inline back into the top module when
+//! <https://github.com/lake-rs/embedded-cal/issues/40> is addressed).
+
+use super::*;
+
+impl embedded_cal::HashProvider for DummySha256 {
+    type Algorithm = embedded_cal::NoHashAlgorithms;
+    type HashState = embedded_cal::NoHashAlgorithms;
+    type HashResult = embedded_cal::NoHashAlgorithms;
+
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+        match algorithm {}
+    }
+
+    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
+        match *instance {}
+    }
+
+    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+        match instance {}
+    }
+}
+
+impl embedded_cal::HmacProvider for DummySha256 {
+    type Algorithm = embedded_cal::NoHmacAlgorithms;
+    type Key = embedded_cal::NoHmacAlgorithms;
+    type HmacState = embedded_cal::NoHmacAlgorithms;
+    type HmacResult = embedded_cal::NoHmacAlgorithms;
+
+    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
+        match algorithm {}
+    }
+
+    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+        match key {}
+    }
+
+    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
+        match *state {}
+    }
+
+    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+        match state {}
+    }
+}
