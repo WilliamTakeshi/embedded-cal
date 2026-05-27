@@ -12,6 +12,7 @@ version.workspace = true
 embedded-cal.path = "../embedded-cal"
 libcrux-sha2 = "0.0.6"
 libcrux-aesgcm = "0.0.8"
+libcrux-traits = { version = "0.0.7", features = ["error-in-core"] }
 
 [dev-dependencies]
 testvectors.path = "../testvectors"

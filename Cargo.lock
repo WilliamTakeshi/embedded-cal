@@ -302,6 +302,7 @@ dependencies = [
  "embedded-cal",
  "libcrux-aesgcm",
  "libcrux-sha2",
+ "libcrux-traits 0.0.7",
  "testvectors",
 ]
 

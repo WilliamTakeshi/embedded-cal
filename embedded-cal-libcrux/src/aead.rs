@@ -1,8 +1,13 @@
-use libcrux_aesgcm::AeadConsts;
+use libcrux_aesgcm::AeadConsts as _;
+use libcrux_traits::aead::typed_owned;
 
 use embedded_cal::AeadProvider;
 
 use super::*;
+
+// Used to copy the ciphertext out of the way, and to spool the AAD.
+extern crate alloc;
+use alloc::{vec, vec::Vec};
 
 pub enum AeadAlgorithm<EC: ExtenderConfig> {
     Direct(<EC::Base as AeadProvider>::Algorithm),
@@ -50,11 +55,63 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
         message: &mut [u8],
         aad: impl embedded_cal::AadGenerator,
     ) -> Self::Tag {
-        match key {
-            Key::Direct(k) => Tag::Direct(self.0.encrypt_in_place(k, nonce, message, aad)),
-            Key::AesGcm128(key) => todo!(),
-            Key::AesGcm256(key) => todo!(),
+        // Handle the simple case quicly; everything else needs the allocations
+        if let Key::Direct(k) = key {
+            return Tag::Direct(self.0.encrypt_in_place(k, nonce, message, aad));
+        };
+
+        let mut ciphertext = vec![0; message.len()];
+        let aad: Vec<_> = aad.items().flatten().copied().collect();
+
+        // I hope this explicitness mess pays off when we run not 2 but many types through
+        // the match below.
+
+        fn encrypt<Alg, const T: usize, const N: usize>(
+            ciphertext: &mut Vec<u8>,
+            key: &typed_owned::Key<Alg>,
+            nonce: &[u8],
+            aad: &Vec<u8>,
+            message: &[u8],
+        ) -> typed_owned::Tag<Alg>
+        where
+            Alg: typed_owned::Aead,
+            typed_owned::Tag<Alg>: From<[u8; T]>,
+            typed_owned::Nonce<Alg>: From<[u8; N]>,
+        {
+            let mut tag: typed_owned::Tag<Alg> = [0u8; _].into();
+            let nonce: typed_owned::Nonce<Alg> =
+                (<[u8; N]>::try_from(nonce).expect("nonce length mismatch")).into();
+            Alg::encrypt(
+                ciphertext.as_mut_slice(),
+                &mut tag,
+                key,
+                &nonce,
+                aad.as_slice(),
+                message,
+            )
+            .expect("slice lenghts match");
+            tag
         }
+
+        let tag = match key {
+            Key::Direct(_) => unreachable!(),
+            Key::AesGcm128(key) => Tag::AesGcm128(encrypt::<libcrux_aesgcm::AesGcm128, _, _>(
+                &mut ciphertext,
+                key,
+                nonce,
+                &aad,
+                message,
+            )),
+            Key::AesGcm256(key) => Tag::AesGcm256(encrypt::<libcrux_aesgcm::AesGcm256, _, _>(
+                &mut ciphertext,
+                key,
+                nonce,
+                &aad,
+                message,
+            )),
+        };
+        message.copy_from_slice(&ciphertext);
+        tag
     }
 
     fn decrypt_in_place(
@@ -65,10 +122,63 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
         tag: &[u8],
         aad: impl embedded_cal::AadGenerator,
     ) -> Result<(), embedded_cal::DecryptionFailed> {
+        // Handle the simple case quicly; everything else needs the allocations
+        if let Key::Direct(k) = key {
+            return self.0.decrypt_in_place(k, nonce, message, tag, aad);
+        };
+
+        let mut ciphertext = Vec::from(&*message);
+        let aad: Vec<_> = aad.items().flatten().copied().collect();
+
+        // I hope this explicitness mess pays off when we run not 2 but many types through
+        // the match below.
+
+        fn decrypt<Alg, const T: usize, const N: usize>(
+            ciphertext: &mut Vec<u8>,
+            key: &typed_owned::Key<Alg>,
+            nonce: &[u8],
+            aad: &Vec<u8>,
+            message: &mut [u8],
+            tag: &[u8],
+        ) -> Result<(), embedded_cal::DecryptionFailed>
+        where
+            Alg: typed_owned::Aead,
+            typed_owned::Tag<Alg>: From<[u8; T]>,
+            typed_owned::Nonce<Alg>: From<[u8; N]>,
+        {
+            let tag: typed_owned::Tag<Alg> =
+                (<[u8; T]>::try_from(tag).expect("tag length mismatch")).into();
+            let nonce: typed_owned::Nonce<Alg> =
+                (<[u8; N]>::try_from(nonce).expect("nonce length mismatch")).into();
+            Alg::decrypt(
+                ciphertext.as_mut_slice(),
+                key,
+                &nonce,
+                aad.as_slice(),
+                message,
+                &tag,
+            )
+            .map_err(|_| embedded_cal::DecryptionFailed)
+        }
+
         match key {
-            Key::Direct(k) => self.0.decrypt_in_place(k, nonce, message, tag, aad),
-            Key::AesGcm128(key) => todo!(),
-            Key::AesGcm256(key) => todo!(),
+            Key::Direct(_) => unreachable!(),
+            Key::AesGcm128(key) => decrypt::<libcrux_aesgcm::AesGcm128, _, _>(
+                &mut ciphertext,
+                key,
+                nonce,
+                &aad,
+                message,
+                tag,
+            ),
+            Key::AesGcm256(key) => decrypt::<libcrux_aesgcm::AesGcm256, _, _>(
+                &mut ciphertext,
+                key,
+                nonce,
+                &aad,
+                message,
+                tag,
+            ),
         }
     }
 }
