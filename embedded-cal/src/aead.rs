@@ -50,6 +50,14 @@ pub trait AeadProvider {
     ///
     /// … if nonce's length is not `alg.nonce_length()` of the algorithm that generated the key, or
     /// the tag's length is not `alg.tag_length()`.
+    ///
+    /// # Implementation guidance
+    ///
+    /// As the message is passed in in a buffer that is available even in case of error, it is best
+    /// practice to zero the message when verification fails, to make sure that even when the error
+    /// is handled badly, an attacker can not hope to place crafted content in a place that might
+    /// be mistaken for verified data.
+    #[must_use = "message must not be accessed after a failed decryption"]
     fn decrypt_in_place(
         &mut self,
         key: &Self::Key,
