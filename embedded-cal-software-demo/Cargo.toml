@@ -1,5 +1,5 @@
 [package]
-name = "embedded-cal-software"
+name = "embedded-cal-software-demo"
 edition.workspace = true
 license.workspace = true
 readme.workspace = true
