@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod empty;
+
 mod aead;
 mod hash;
 mod hmac;
