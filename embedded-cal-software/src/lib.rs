@@ -326,6 +326,29 @@ impl embedded_cal::HmacAlgorithm for HmacAlgorithm {
     }
 }
 
+pub enum HmacKey<EC: ExtenderConfig> {
+    // This is exactly as HmacState to the point where the HmacKey associated type could also be
+    // HmacState -- but that would incur a Clone requirement (and a Clone guarantee on HmacState)
+    // that we can't keep up when we forward to the underlying implementation.
+    HmacSha256 {
+        inner: HashState<EC>,
+        outer_key: [u8; SHA2SHORT_BLOCK_SIZE],
+    },
+}
+
+impl<EC: ExtenderConfig> Clone for HmacKey<EC> {
+    // This is the default implemnentation, but we can't derive it because EC is not clone. (We
+    // don't expect it to, but we'd need "minimal derives" in Rust to make it derivable).
+    fn clone(&self) -> Self {
+        match self {
+            Self::HmacSha256 { inner, outer_key } => Self::HmacSha256 {
+                inner: inner.clone(),
+                outer_key: outer_key.clone(),
+            },
+        }
+    }
+}
+
 pub enum HmacState<EC: ExtenderConfig> {
     HmacSha256 {
         /// Inner hash state accumulating `H((K XOR ipad) || message)`.
@@ -349,10 +372,11 @@ impl AsRef<[u8]> for HmacResult {
 
 impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
     type Algorithm = HmacAlgorithm;
+    type Key = HmacKey<EC>;
     type HmacState = HmacState<EC>;
     type HmacResult = HmacResult;
 
-    fn init(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState {
+    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
         match algorithm {
             HmacAlgorithm::HmacSha256 => {
                 // Normalise key to exactly SHA2SHORT_BLOCK_SIZE bytes.
@@ -383,8 +407,14 @@ impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
                 let mut inner = HashProvider::init(self, HashAlgorithm::Sha256);
                 HashProvider::update(self, &mut inner, &ipad_block);
 
-                HmacState::HmacSha256 { inner, outer_key }
+                HmacKey::HmacSha256 { inner, outer_key }
             }
+        }
+    }
+
+    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+        match key {
+            HmacKey::HmacSha256 { inner, outer_key } => HmacState::HmacSha256 { inner, outer_key }
         }
     }
 

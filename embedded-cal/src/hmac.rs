@@ -1,17 +1,38 @@
 pub trait HmacProvider {
     type Algorithm: HmacAlgorithm;
+    /// A nascent state that .
+    type Key: Clone + Sized;
     /// State carried between rounds of feeding data into the HMAC.
     type HmacState: Sized;
     /// Output of an HMAC operation.
     type HmacResult: AsRef<[u8]>;
 
-    fn init(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState;
+    /// Starts an HMAC operation based on a key that is entered as raw bytes.
+    ///
+    /// This is a convenience wrapper for `Self::init(Self::load_from_keydatra(algorithm, key))`.
+    fn init_with_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState {
+        let key = self.load_from_keydata(algorithm, key);
+        self.init(key)
+    }
+    /// Initializes a key from raw bytes.
+    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key;
+    /// Starts an HMAC operation.
+    fn init(&mut self, key: Self::Key) -> Self::HmacState;
     fn update(&mut self, state: &mut Self::HmacState, data: &[u8]);
     fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult;
 
-    /// Compute HMAC over contiguous in-memory data in a single pass.
-    fn hmac(&mut self, algorithm: Self::Algorithm, key: &[u8], data: &[u8]) -> Self::HmacResult {
-        let mut state = self.init(algorithm, key);
+    /// Compute HMAC over contiguous in-memory data in a single pass, based on a key directly
+    /// entered as bytes.
+    ///
+    /// This is a shortcut for [`self.init_with_keydata(…)`] / [`self.update(…)`] /
+    /// [`self.finalize(…)`].
+    fn hmac_with_keydata(
+        &mut self,
+        algorithm: Self::Algorithm,
+        key: &[u8],
+        data: &[u8],
+    ) -> Self::HmacResult {
+        let mut state = self.init_with_keydata(algorithm, key);
         self.update(&mut state, data);
         self.finalize(state)
     }

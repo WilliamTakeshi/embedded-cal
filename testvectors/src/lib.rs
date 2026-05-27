@@ -94,12 +94,13 @@ pub fn test_hmac_sha256<Cal: embedded_cal::HmacProvider>(cal: &mut Cal) {
 
     for (tv_key, tv_data, tv_mac) in HMAC_SHA256 {
         assert_eq!(
-            cal.hmac(hmac_sha256.clone(), tv_key, tv_data).as_ref(),
+            cal.hmac_with_keydata(hmac_sha256.clone(), tv_key, tv_data)
+                .as_ref(),
             tv_mac,
             "HMAC values mismatch"
         );
 
-        let mut state = cal.init(hmac_sha256.clone(), tv_key);
+        let mut state = cal.init_with_keydata(hmac_sha256.clone(), tv_key);
         let mid = tv_data.len() / 2;
         let postmid = mid + 1;
         if tv_data.len() >= postmid {
