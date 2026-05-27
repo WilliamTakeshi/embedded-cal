@@ -443,8 +443,6 @@ impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
     }
 }
 
-// Remaining code is copied from https://github.com/lake-rs/embedded-cal/pull/9
-
 fn sha256_padding(msg_len: usize, out: &mut [u8; 256]) -> usize {
     sha2_padding(msg_len, 64, 56, 8, out)
 }
