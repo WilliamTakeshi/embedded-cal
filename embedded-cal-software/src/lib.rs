@@ -343,7 +343,7 @@ impl<EC: ExtenderConfig> Clone for HmacKey<EC> {
         match self {
             Self::HmacSha256 { inner, outer_key } => Self::HmacSha256 {
                 inner: inner.clone(),
-                outer_key: outer_key.clone(),
+                outer_key: *outer_key,
             },
         }
     }
