@@ -4,7 +4,7 @@
 //! only does the hard work of the SHA hashes and not the clerical buffering / padding.
 #![no_std]
 
-use embedded_cal::{HashProvider, plumbing::Plumbing};
+use embedded_cal::{Cal, plumbing::Plumbing};
 
 mod hash;
 mod hmac;
@@ -13,7 +13,7 @@ mod rng;
 pub trait ExtenderConfig {
     const IMPLEMENT_SHA2SHORT: bool;
 
-    type Base: HashProvider + Plumbing;
+    type Base: Cal + Plumbing;
 }
 
 impl<EC: ExtenderConfig> Extender<EC> {
