@@ -11,6 +11,8 @@
 /// All implementation follows the Wikipedia pseudocode.
 pub struct DummySha256;
 
+mod empty_impls;
+
 const k: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -21,47 +23,6 @@ const k: [u32; 64] = [
     0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
-
-impl embedded_cal::HashProvider for DummySha256 {
-    type Algorithm = embedded_cal::NoHashAlgorithms;
-    type HashState = embedded_cal::NoHashAlgorithms;
-    type HashResult = embedded_cal::NoHashAlgorithms;
-
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
-        match algorithm {}
-    }
-
-    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
-        match *instance {}
-    }
-
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
-        match instance {}
-    }
-}
-
-impl embedded_cal::HmacProvider for DummySha256 {
-    type Algorithm = embedded_cal::NoHmacAlgorithms;
-    type Key = embedded_cal::NoHmacAlgorithms;
-    type HmacState = embedded_cal::NoHmacAlgorithms;
-    type HmacResult = embedded_cal::NoHmacAlgorithms;
-
-    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
-        match algorithm {}
-    }
-
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
-        match key {}
-    }
-
-    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
-        match *state {}
-    }
-
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
-        match state {}
-    }
-}
 
 impl embedded_cal::plumbing::Plumbing for DummySha256 {}
 
