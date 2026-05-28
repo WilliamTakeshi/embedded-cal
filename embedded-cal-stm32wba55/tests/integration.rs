@@ -59,6 +59,12 @@ mod tests {
     }
 
     #[test]
+    fn test_hkdf_sha256(state: &mut super::TestState) {
+        // Runs directly against the hardware HMAC accelerator for HKDF-Extract/Expand.
+        testvectors::test_hkdf_sha256(&mut state.raw);
+    }
+
+    #[test]
     fn test_tryrng(state: &mut super::TestState) {
         embedded_cal::test_tryrng(&mut state.cal);
     }

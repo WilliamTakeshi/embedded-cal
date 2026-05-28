@@ -46,6 +46,13 @@ mod tests {
     }
 
     #[test]
+    fn test_hkdf_sha256(state: &mut super::TestState) {
+        // HKDF is not accelerated by the nRF54L15 hardware; it runs via the
+        // software Extender on top of the hardware SHA-256.
+        testvectors::test_hkdf_sha256(&mut state.cal);
+    }
+
+    #[test]
     fn test_tryrng(state: &mut super::TestState) {
         embedded_cal::test_tryrng(&mut state.cal);
     }
