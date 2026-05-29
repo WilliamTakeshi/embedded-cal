@@ -11,6 +11,7 @@ impl embedded_cal_software::ExtenderConfig for ImplementSha256Short {
 }
 struct TestState {
     cal: embedded_cal_software::Extender<ImplementSha256Short>,
+    raw: embedded_cal_nrf54l15::Nrf54l15Cal,
 }
 
 #[defmt_test::tests]
@@ -20,13 +21,20 @@ mod tests {
 
     #[init]
     fn init() -> super::TestState {
+        let raw = embedded_cal_nrf54l15::Nrf54l15Cal::new(
+            nrf_pac::CRACEN_S,
+            nrf_pac::CRACENCORE_S,
+            nrf_pac::CCM00_S,
+        );
         // FIXME: How to make sure there is a exclusive reference for CRACEN_S?
-        let base =
-            embedded_cal_nrf54l15::Nrf54l15Cal::new(nrf_pac::CRACEN_S, nrf_pac::CRACENCORE_S);
-
+        let base = embedded_cal_nrf54l15::Nrf54l15Cal::new(
+            nrf_pac::CRACEN_S,
+            nrf_pac::CRACENCORE_S,
+            nrf_pac::CCM00_S,
+        );
         let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
 
-        super::TestState { cal }
+        super::TestState { cal, raw }
     }
 
     #[test]
@@ -48,5 +56,10 @@ mod tests {
     #[test]
     fn test_tryrng(state: &mut super::TestState) {
         embedded_cal::test_tryrng(&mut state.cal);
+    }
+
+    #[test]
+    fn test_aead_aesccm_16_64_128(state: &mut super::TestState) {
+        testvectors::test_aead_aesccm_16_64_128(&mut state.raw);
     }
 }
