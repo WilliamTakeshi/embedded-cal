@@ -206,13 +206,142 @@ impl embedded_cal::AeadProvider for super::Stm32wba55Cal {
     fn decrypt_in_place(
         &mut self,
         key: &Self::Key,
-        _nonce: &[u8],
-        _message: &mut [u8],
-        _tag: &[u8],
-        _aad: impl embedded_cal::AadGenerator,
+        nonce: &[u8],
+        message: &mut [u8],
+        tag: &[u8],
+        aad: impl embedded_cal::AadGenerator,
     ) -> Result<(), embedded_cal::DecryptionFailed> {
+        use stm32_metapac::aes::vals::{Chmod, Datatype, Gcmph, Mode};
+
         match key {
-            AeadKey::AesCcm16_64_128(_) => todo!(),
+            AeadKey::AesCcm16_64_128(key) => {
+                let mut aad_buf = [0u8; 255];
+                let mut aad_len = 0usize;
+                for chunk in aad.items() {
+                    aad_buf[aad_len..aad_len + chunk.len()].copy_from_slice(chunk);
+                    aad_len += chunk.len();
+                }
+
+                let flags = ((aad_len > 0) as u8) << 6 | 0x19;
+                let mut b0 = [0u8; 16];
+                b0[0] = flags;
+                b0[1..14].copy_from_slice(nonce);
+                b0[14] = (message.len() >> 8) as u8;
+                b0[15] = message.len() as u8;
+
+                self.aes.cr().write(|w| w.set_iprst(true));
+                self.aes.cr().write(|w| w.set_iprst(false));
+                self.aes.cr().write(|w| {
+                    w.set_chmod(Chmod::CCM);
+                    w.set_mode(Mode::MODE3); // decrypt
+                    w.set_datatype(Datatype::NONE);
+                    w.set_keysize(false);
+                    w.set_gcmph(Gcmph::INIT_PHASE);
+                });
+
+                for i in 0..4 {
+                    self.aes.keyr(i).write_value(u32::from_be_bytes(
+                        key[i * 4..i * 4 + 4].try_into().unwrap(),
+                    ));
+                }
+                while !self.aes.sr().read().keyvalid() {}
+
+                // Phase 0 — Init
+                for i in 0..4 {
+                    self.aes.ivr(i).write_value(u32::from_be_bytes(
+                        b0[i * 4..i * 4 + 4].try_into().unwrap(),
+                    ));
+                }
+                self.aes.cr().modify(|w| w.set_en(true));
+                while self.aes.sr().read().busy() {}
+
+                // Phase 1 — Header
+                if aad_len > 0 {
+                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::HEADER_PHASE));
+
+                    let header_total = 2 + aad_len;
+                    let header_padded = (header_total + 15) / 16 * 16;
+                    let mut header = [0u8; 272];
+                    header[0] = (aad_len >> 8) as u8;
+                    header[1] = aad_len as u8;
+                    header[2..2 + aad_len].copy_from_slice(&aad_buf[..aad_len]);
+
+                    for chunk in header[..header_padded].chunks_exact(4) {
+                        self.aes
+                            .dinr()
+                            .write_value(u32::from_be_bytes(chunk.try_into().unwrap()));
+                    }
+                    while self.aes.sr().read().busy() {}
+                }
+
+                // Phase 2 — Payload: decrypt in-place
+                if !message.is_empty() {
+                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::PAYLOAD_PHASE));
+
+                    let msg_len = message.len();
+                    let mut offset = 0usize;
+                    while offset < msg_len {
+                        let block_end = (offset + 16).min(msg_len);
+
+                        if block_end == msg_len {
+                            let remainder = msg_len % 16;
+                            if remainder != 0 {
+                                self.aes
+                                    .cr()
+                                    .modify(|w| w.set_npblb((16 - remainder) as u8));
+                            }
+                        }
+
+                        let mut block = [0u8; 16];
+                        block[..block_end - offset].copy_from_slice(&message[offset..block_end]);
+                        for i in 0..4 {
+                            self.aes.dinr().write_value(u32::from_be_bytes(
+                                block[i * 4..i * 4 + 4].try_into().unwrap(),
+                            ));
+                        }
+                        while self.aes.sr().read().busy() {}
+
+                        for i in 0..4 {
+                            let bytes = self.aes.doutr().read().to_be_bytes();
+                            let dst_start = offset + i * 4;
+                            let dst_end = (dst_start + 4).min(msg_len);
+                            if dst_start < dst_end {
+                                message[dst_start..dst_end]
+                                    .copy_from_slice(&bytes[..dst_end - dst_start]);
+                            }
+                        }
+
+                        offset = block_end;
+                    }
+                }
+
+                // Phase 3 — Final: compute tag over the decrypted payload
+                self.aes.cr().modify(|w| w.set_gcmph(Gcmph::FINAL_PHASE));
+                self.aes.cr().modify(|w| w.set_en(true));
+                while self.aes.sr().read().busy() {}
+
+                let mut computed_tag = [0u8; 8];
+                computed_tag[0..4].copy_from_slice(&self.aes.ivr(0).read().to_be_bytes());
+                computed_tag[4..8].copy_from_slice(&self.aes.ivr(1).read().to_be_bytes());
+
+                self.aes.cr().modify(|w| w.set_en(false));
+
+                // Constant-time comparison to prevent timing side-channels.
+                let mut diff = 0u8;
+                for (a, b) in computed_tag.iter().zip(tag.iter()) {
+                    diff |= a ^ b;
+                }
+                // Unlike the nRF54 implementation (which decrypts into a temporary
+                // buffer and only copies to `message` after verification), plaintext
+                // is written directly to `message` during Phase 2. Zero it on failure
+                // so unauthenticated plaintext is never visible to the caller.
+                if diff != 0 {
+                    message.fill(0);
+                    return Err(embedded_cal::DecryptionFailed);
+                }
+
+                Ok(())
+            }
             AeadKey::AesCcm16_64_256(_) => todo!(),
         }
     }
