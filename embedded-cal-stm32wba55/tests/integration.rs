@@ -30,11 +30,13 @@ mod tests {
             stm32_metapac::HASH,
             stm32_metapac::RCC,
             stm32_metapac::RNG,
+            stm32_metapac::AES,
         );
         let base = embedded_cal_stm32wba55::Stm32wba55Cal::new(
             stm32_metapac::HASH,
             stm32_metapac::RCC,
             stm32_metapac::RNG,
+            stm32_metapac::AES,
         );
 
         let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
