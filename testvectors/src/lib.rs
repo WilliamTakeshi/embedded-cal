@@ -243,9 +243,9 @@ impl AeadCase {
         let produced_tag = cal.encrypt_in_place(&key, self.nonce, buf, self.aad);
         assert_eq!(produced_tag.as_ref(), self.tag);
         assert_eq!(buf, self.ciphertext);
-        // cal.decrypt_in_place(&key, self.nonce, buf, self.tag, self.aad)
-        //     .unwrap();
-        // assert_eq!(buf, self.plaintext);
+        cal.decrypt_in_place(&key, self.nonce, buf, self.tag, self.aad)
+            .unwrap();
+        assert_eq!(buf, self.plaintext);
     }
 }
 

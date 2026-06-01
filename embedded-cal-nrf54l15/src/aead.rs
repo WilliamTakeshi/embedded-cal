@@ -215,13 +215,130 @@ impl embedded_cal::AeadProvider for super::Nrf54l15Cal {
     fn decrypt_in_place(
         &mut self,
         key: &Self::Key,
-        _nonce: &[u8],
-        _message: &mut [u8],
-        _tag: &[u8],
-        _aad: impl embedded_cal::AadGenerator,
+        nonce: &[u8],
+        cyphertext: &mut [u8],
+        tag: &[u8],
+        aad: impl embedded_cal::AadGenerator,
     ) -> Result<(), embedded_cal::DecryptionFailed> {
+        use nrf_pac::ccm::vals;
+
         match *key {
-            AeadKey::AesCcm16_64_128(_) => todo!(),
+            AeadKey::AesCcm16_64_128(key) => {
+                self.ccm
+                    .enable()
+                    .write(|w| w.set_enable(vals::Enable::ENABLED));
+                self.ccm.adatamask().write(|w| w.set_adatamask(0xFF));
+                self.ccm.mode().write(|w| {
+                    w.set_mode(vals::Mode::FAST_DECRYPTION);
+                    w.set_maclen(vals::Maclen::M8);
+                    w.set_protocol(vals::Protocol::IEEE802154);
+                });
+
+                let mut aad_buf = [0u8; 256];
+                let mut aad_len: usize = 0;
+                for chunk in aad.items() {
+                    aad_buf[aad_len..aad_len + chunk.len()].copy_from_slice(chunk);
+                    aad_len += chunk.len();
+                }
+
+                let alen_input_buf = (aad_len as u32).to_le_bytes();
+                let ciphertext_tag_len = cyphertext.len() + 8;
+                let mlen_input_buf = (ciphertext_tag_len as u32).to_le_bytes();
+
+                let mut ciphertext_tag_buf = [0u8; 256];
+                ciphertext_tag_buf[..cyphertext.len()].copy_from_slice(cyphertext);
+                ciphertext_tag_buf[cyphertext.len()..ciphertext_tag_len].copy_from_slice(tag);
+
+                let mut input_jobs: [EcbJob; 5] = [
+                    EcbJob::new(alen_input_buf.as_ptr(), 2, EcbJobAttr::Alen),
+                    EcbJob::new(mlen_input_buf.as_ptr(), 2, EcbJobAttr::Mlen),
+                    EcbJob::new(aad_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
+                    EcbJob::new(
+                        ciphertext_tag_buf.as_ptr(),
+                        ciphertext_tag_len as u8,
+                        EcbJobAttr::Mdata,
+                    ),
+                    EcbJob::zero(),
+                ];
+
+                let alen_output_buf = (aad_len as u32).to_le_bytes();
+                let mlen_output_buf = (cyphertext.len() as u32).to_le_bytes();
+                let aad_out_buf = [0u8; 255];
+                let mut plaintext_buf = [0u8; 263];
+
+                // Decrypt output mirrors encrypt INPUT order: Adata=AAD, Mdata=plaintext.
+                let mut output_jobs: [EcbJob; 5] = [
+                    EcbJob::new(alen_output_buf.as_ptr(), 2, EcbJobAttr::Alen),
+                    EcbJob::new(mlen_output_buf.as_ptr(), 2, EcbJobAttr::Mlen),
+                    EcbJob::new(aad_out_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
+                    EcbJob::new(
+                        plaintext_buf.as_mut_ptr(),
+                        cyphertext.len() as u8,
+                        EcbJobAttr::Mdata,
+                    ),
+                    EcbJob::zero(),
+                ];
+
+                let input_jobs_ptr = core::ptr::addr_of_mut!(input_jobs) as u32;
+                let output_jobs_ptr = core::ptr::addr_of_mut!(output_jobs) as u32;
+
+                self.ccm
+                    .key()
+                    .value(0)
+                    .write_value(u32::from_be_bytes(key[12..16].try_into().unwrap()));
+                self.ccm
+                    .key()
+                    .value(1)
+                    .write_value(u32::from_be_bytes(key[8..12].try_into().unwrap()));
+                self.ccm
+                    .key()
+                    .value(2)
+                    .write_value(u32::from_be_bytes(key[4..8].try_into().unwrap()));
+                self.ccm
+                    .key()
+                    .value(3)
+                    .write_value(u32::from_be_bytes(key[0..4].try_into().unwrap()));
+
+                self.ccm
+                    .nonce()
+                    .value(0)
+                    .write_value(u32::from_be_bytes(nonce[9..].try_into().unwrap()));
+                self.ccm
+                    .nonce()
+                    .value(1)
+                    .write_value(u32::from_be_bytes(nonce[5..9].try_into().unwrap()));
+                self.ccm
+                    .nonce()
+                    .value(2)
+                    .write_value(u32::from_be_bytes(nonce[1..5].try_into().unwrap()));
+                self.ccm
+                    .nonce()
+                    .value(3)
+                    .write_value(u32::from_be_bytes([0, 0, 0, nonce[0]]));
+
+                self.ccm.in_().ptr().write_value(input_jobs_ptr);
+                self.ccm.out().ptr().write_value(output_jobs_ptr);
+
+                self.ccm.tasks_start().write_value(1);
+
+                while self.ccm.events_end().read() == 0 {}
+                self.ccm.events_end().write_value(0);
+
+                let mac_ok =
+                    self.ccm.macstatus().read().macstatus() == vals::Macstatus::CHECK_PASSED;
+
+                self.ccm
+                    .enable()
+                    .write(|w| w.set_enable(vals::Enable::DISABLED));
+
+                if !mac_ok {
+                    return Err(embedded_cal::DecryptionFailed);
+                }
+
+                // Message should only be copied after the verification
+                cyphertext.copy_from_slice(&plaintext_buf[..cyphertext.len()]);
+                Ok(())
+            }
             AeadKey::AesCcm16_64_256(_) => todo!(),
         }
     }
