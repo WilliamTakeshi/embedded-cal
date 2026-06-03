@@ -3,6 +3,7 @@
 pub mod empty;
 
 mod aead;
+mod dh;
 mod hash;
 mod hmac;
 mod rng;
@@ -15,6 +16,7 @@ pub use aead::{
 };
 pub use hash::{HashAlgorithm, HashProvider, test_hash_algorithm_sha256};
 pub use hmac::{HmacAlgorithm, HmacProvider, test_hmac_algorithm_hmacsha256};
+pub use dh::DhProvider;
 pub use rng::test_tryrng;
 
 pub trait Cal: HashProvider + HmacProvider + AeadProvider {}
