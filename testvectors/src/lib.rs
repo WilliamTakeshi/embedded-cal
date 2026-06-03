@@ -97,6 +97,56 @@ pub const AES_CCM_16_64_128: &[AeadCase] = &[
         ciphertext: &hex!("612f1092f1"),
         tag: &hex!("776f1c1668b3825e"),
     },
+    // From RFC3610 (Packet Vector #1)
+    AeadCase {
+        alg_cose: 10,
+        key: &hex!("c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"),
+        nonce: &hex!("00000003020100a0a1a2a3a4a5"),
+        aad: &hex!("0001020304050607"),
+        plaintext: &hex!("08090a0b0c0d0e0f101112131415161718191a1b1c1d1e"),
+        ciphertext: &hex!("588c979a61c663d2f066d0c2c0f989806d5f6b61dac384"),
+        tag: &hex!("17e8d12cfdf926e0"),
+    },
+    // From RFC3610 (Packet Vector #2)
+    AeadCase {
+        alg_cose: 10,
+        key: &hex!("c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"),
+        nonce: &hex!("00000004030201a0a1a2a3a4a5"),
+        aad: &hex!("0001020304050607"),
+        plaintext: &hex!("08090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
+        ciphertext: &hex!("72c91a36e135f8cf291ca894085c87e3cc15c439c9e43a3b"),
+        tag: &hex!("a091d56e10400916"),
+    },
+    // From RFC3610 (Packet Vector #3)
+    AeadCase {
+        alg_cose: 10,
+        key: &hex!("c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"),
+        nonce: &hex!("00000005040302a0a1a2a3a4a5"),
+        aad: &hex!("0001020304050607"),
+        plaintext: &hex!("08090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"),
+        ciphertext: &hex!("51b1e5f44a197d1da46b0f8e2d282ae871e838bb64da859657"),
+        tag: &hex!("4adaa76fbd9fb0c5"),
+    },
+    // From RFC3610 (Packet Vector #4)
+    AeadCase {
+        alg_cose: 10,
+        key: &hex!("c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"),
+        nonce: &hex!("00000006050403a0a1a2a3a4a5"),
+        aad: &hex!("000102030405060708090a0b"),
+        plaintext: &hex!("0c0d0e0f101112131415161718191a1b1c1d1e"),
+        ciphertext: &hex!("a28c6865939a9a79faaa5c4c2a9d4a91cdac8c"),
+        tag: &hex!("96c861b9c9e61ef1"),
+    },
+    // From RFC3610 (Packet Vector #5)
+    AeadCase {
+        alg_cose: 10,
+        key: &hex!("c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"),
+        nonce: &hex!("00000007060504a0a1a2a3a4a5"),
+        aad: &hex!("000102030405060708090a0b"),
+        plaintext: &hex!("0c0d0e0f101112131415161718191a1b1c1d1e1f"),
+        ciphertext: &hex!("dcf1fb7b5d9e23fb9d4e131253658ad86ebdca3e"),
+        tag: &hex!("51e83f077d9c2d93"),
+    },
 ];
 
 pub fn test_hmac_sha256<Cal: embedded_cal::HmacProvider>(cal: &mut Cal) {
@@ -191,7 +241,7 @@ impl AeadCase {
         // FIXME: try again with chunked AAD
 
         let produced_tag = cal.encrypt_in_place(&key, self.nonce, buf, self.aad);
-        assert_eq!(self.tag, produced_tag.as_ref());
+        assert_eq!(produced_tag.as_ref(), self.tag);
         assert_eq!(buf, self.ciphertext);
         cal.decrypt_in_place(&key, self.nonce, buf, self.tag, self.aad)
             .unwrap();
