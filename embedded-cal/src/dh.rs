@@ -21,10 +21,8 @@ pub trait DhProvider {
     type PublicKey: Sized;
     type SharedSecret: Sized + AsRef<[u8]>;
 
-    fn load_ec2_public_key(&mut self, alg: Self::DhAlgorithm, x: &[u8], y: &[u8]) -> Self::PublicKey;
-
     /// Derives a shared secret from a public and a private key.
-    /// 
+    ///
     /// # Errors
     ///
     /// … are produced only if the private and the public key are for different algorithms.
@@ -34,7 +32,7 @@ pub trait DhProvider {
         &mut self,
         private: &Self::SecretKey,
         public: &Self::PublicKey,
-    ) -> Self::SharedSecret;
+    ) -> Result<Self::SharedSecret, IncompatibleKeys>;
 
     /// Produces the public key corresponding to a private key.
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey;
@@ -79,7 +77,7 @@ pub trait DhAlgorithm: Sized + PartialEq + Eq + core::fmt::Debug + Clone {
         unused_variables,
         reason = "Argument names are part of the documentation"
     )]
-    fn from_cose_ecdh(number: impl Into<i128>) -> Option<Self> {
+    fn from_cose_ecdh(curve: impl Into<i128>) -> Option<Self> {
         None
     }
 }
