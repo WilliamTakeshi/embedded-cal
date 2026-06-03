@@ -156,13 +156,13 @@ pub enum AeadKey {
 }
 
 pub enum AeadTag {
-    AesCcm16_128_128([u8; 8]),
+    AesCcm16_64_128([u8; 8]),
 }
 
 impl AsRef<[u8]> for AeadTag {
     fn as_ref(&self) -> &[u8] {
         match self {
-            AeadTag::AesCcm16_128_128(t) => t,
+            AeadTag::AesCcm16_64_128(t) => t,
         }
     }
 }
@@ -194,7 +194,7 @@ impl embedded_cal::AeadProvider for RustcryptoCal {
         use ccm::{AeadInPlace, KeyInit};
         let aad_linear = self.collect_aad(aad);
         match key {
-            AeadKey::AesCcm16_64_128(key) => AeadTag::AesCcm16_128_128(
+            AeadKey::AesCcm16_64_128(key) => AeadTag::AesCcm16_64_128(
                 AesCcm16_64_128::new(key.into())
                     .encrypt_in_place_detached(
                         nonce.try_into().expect("nonce length mismatch"),
