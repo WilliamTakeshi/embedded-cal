@@ -149,6 +149,64 @@ pub const AES_CCM_16_64_128: &[AeadCase] = &[
     },
 ];
 
+pub const AES_CCM_16_64_256: &[AeadCase] = &[
+    // From CCM Test Vector (SP 800-38C)
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("7022eaa52c9da821da72d2edd98f6b91dfe474999b75b34699aeb38465f70c1c"),
+        plaintext: &hex!("28ef408d57930086011b167ac04b866e5b58fe6690a0b9c3"),
+        ciphertext: &hex!("356367c6cee4453658418d9517f7c6faddcd7c65aef46013"),
+        tag: &hex!("8cf050f48c505151"),
+    },
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("a61b6c1f0293a7c35520abf158a995e5ae59b43ec5f38ff6fd6529970c9f83ac"),
+        plaintext: &hex!("1c5ad37d2a55afbc390b27cde0c42d6651fe191239bfaa27"),
+        ciphertext: &hex!("01d6f436b322ea0c6051bc2237786df2d76b9b1107eb73f7"),
+        tag: &hex!("6bca352f92f383e1"),
+    },
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("0f1c6dffeda98f7a159f9cc61820bfb29910d8eaa41b751a41f9fe5648f02fba"),
+        plaintext: &hex!("6efe6652d46a84166d30befe2fbee0795e9475b401eedd60"),
+        ciphertext: &hex!("737241194d1dc1a6346a2511f802a0edd801f7b73fba04b0"),
+        tag: &hex!("14fd7c84052208d9"),
+    },
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("151110a9ce7e44e5d76d9cad53c1819317527fcd169051f01c6a3efcc06ea999"),
+        plaintext: &hex!("55b791ee495299916ff3c2327b4990952bebd0a2da9acfc5"),
+        ciphertext: &hex!("483bb6a5d025dc2136a959ddacf5d001ad7e52a1e4ce1615"),
+        tag: &hex!("c3ebc7214b9eef31"),
+    },
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("0ba1210696d735eebc13b609d0ec33bc740805105dd82f065b82892b931f1e6d"),
+        plaintext: &hex!("794a86f5b20d344ad86fd5523d08f1864737be57731440c2"),
+        ciphertext: &hex!("64c6a1be2b7a71fa81354ebdeab4b112c1a23c544d409912"),
+        tag: &hex!("eff08182f8a00f13"),
+    },
+    AeadCase {
+        alg_cose: 11,
+        key: &hex!("bae73483de27b581a7c13f178a6d7bda168c1b4a1cb9180512a13e3ab914eb61"),
+        nonce: &hex!("daf54faef6e4fc7867624b76f2"),
+        aad: &hex!("5a3b71b0fdecce8bd759d3d72321b5c3e882c82627c14e0b59cc8c6d191f243f"),
+        plaintext: &hex!("efa6ddd6fb8e4480a0f64414694e5f9e7f2e9b97cbe9cd14"),
+        ciphertext: &hex!("f22afa9d62f90130f9acdffbbef21f0af9bb1994f5bd14c4"),
+        tag: &hex!("6894be1f8fa14538"),
+    },
+];
+
 pub fn test_hmac_sha256<Cal: embedded_cal::HmacProvider>(cal: &mut Cal) {
     use embedded_cal::HmacAlgorithm;
 
@@ -241,16 +299,36 @@ impl AeadCase {
         // FIXME: try again with chunked AAD
 
         let produced_tag = cal.encrypt_in_place(&key, self.nonce, buf, self.aad);
-        assert_eq!(produced_tag.as_ref(), self.tag);
-        assert_eq!(buf, self.ciphertext);
+        assert_eq!(
+            produced_tag.as_ref(),
+            self.tag,
+            "tag mismatch: expected {:02x?}, got {:02x?}",
+            self.tag,
+            produced_tag.as_ref()
+        );
+        assert_eq!(
+            buf, self.ciphertext,
+            "ciphertext mismatch: expected {:02x?}, got {:02x?}",
+            self.ciphertext, buf
+        );
         cal.decrypt_in_place(&key, self.nonce, buf, self.tag, self.aad)
             .unwrap();
-        assert_eq!(buf, self.plaintext);
+        assert_eq!(
+            buf, self.plaintext,
+            "decryption mismatch: expected {:02x?}, got {:02x?}",
+            self.plaintext, buf
+        );
     }
 }
 
 pub fn test_aead_aesccm_16_64_128(cal: &mut impl embedded_cal::AeadProvider) {
     for case in AES_CCM_16_64_128 {
+        case.test(cal);
+    }
+}
+
+pub fn test_aead_aesccm_16_64_256(cal: &mut impl embedded_cal::AeadProvider) {
+    for case in AES_CCM_16_64_256 {
         case.test(cal);
     }
 }
