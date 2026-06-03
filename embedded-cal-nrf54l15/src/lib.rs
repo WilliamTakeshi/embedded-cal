@@ -6,7 +6,9 @@ mod try_rng;
 use descriptor::{DescriptorChain, Input, Output};
 use nrf_pac::{cracen, cracencore};
 
-const MAX_DESCRIPTOR_CHAIN_LEN: usize = 4;
+// CCM-256 encrypt needs 4 input descriptors (config, key, header+aad, plaintext) and
+// 2 output descriptors (ciphertext, tag). Decrypt needs 5 input (+ expected tag).
+const MAX_DESCRIPTOR_CHAIN_LEN: usize = 6;
 
 pub struct Nrf54l15Cal {
     // FIXME: No need to enable and take ownership of everything
@@ -219,9 +221,14 @@ impl Nrf54l15Cal {
                     w.set_startpush(true)
                 });
 
-                // Wait
-                while dma.status().read().fetchbusy() {}
-                while dma.status().read().pushbusy() {}
+                // Wait for all three busy bits to clear, matching REG_STATUS_BUSY_MASK
+                // from the Nordic SDK: FETCHER_BUSY (0x01) | PUSHER_BUSY (0x02) |
+                // PUSHER_WAITING_FIFO (0x20). Without PUSHER_WAITING_FIFO the output
+                // buffers may not be fully written when we return.
+                while {
+                    let s = dma.status().read();
+                    s.fetchbusy() || s.pushbusy() || s.pushwaitingfifo()
+                } {}
             });
         });
     }

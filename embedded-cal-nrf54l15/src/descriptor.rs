@@ -22,11 +22,14 @@ struct Descriptor {
     ///
     /// Should be LAST_DESC_PTR in case of the last descriptor of the chain.
     next: *mut Descriptor,
-    // FIXME: Improve documentation, explain the magic number 0x2000_0000
-    /// Length, in bytes, of the memory region described by `addr`.
+    /// Length of the memory region in bytes, with `DMA_REALIGN` (bit 29) set.
+    /// `DMA_REALIGN` tells the DMA engine to re-align its internal state at the end of this
+    /// descriptor before starting the next one.
     sz: u32,
-    // FIXME: Improve documentation, enum all possible tags.
-    /// DMA attribute / tag field.
+    /// Routes this descriptor to a hardware engine and describes the data role.
+    /// Lower bits select the engine (e.g. `DMATAG_BA411 = 1` for AES). Bit 4 marks a
+    /// configuration register write; bits [6:5] encode the data type; bits [12:8] encode the
+    /// number of trailing padding bytes the engine should ignore (`DMATAG_IGN`).
     dmatag: u32,
 }
 
@@ -108,7 +111,13 @@ impl<'mem, Direction, const N: usize> DescriptorChain<'mem, Direction, N> {
             self.descs[i - 1].next = &mut self.descs[i];
         }
         if self.count > 0 {
-            self.descs[self.count - 1].next = LAST_DESC_PTR;
+            let last = &mut self.descs[self.count - 1];
+            last.next = LAST_DESC_PTR;
+            // DMATAG_LAST (bit 5) on the final descriptor signals the engine to
+            // finalize the operation (produce output / authentication tag).
+            // sx_cmdma_finalize_descs() in the Nordic SDK applies this to both
+            // the last input and last output descriptor of every DMA operation.
+            last.dmatag |= 1 << 5;
         }
     }
 
@@ -150,6 +159,7 @@ impl<'mem, const N: usize> DescriptorChain<'mem, Input, N> {
     /// # Safety / Correctness requirements
     ///
     /// - `data` must be DMA-accessible memory.
+    /// - `data.len()` must be a multiple of 4.
     pub(crate) fn push(&mut self, data: &'mem [u8], dmatag: u32) {
         self.push_descriptor(Descriptor::new(
             data.as_ptr() as *mut u8,
@@ -170,6 +180,12 @@ impl<'mem, const N: usize> DescriptorChain<'mem, Output, N> {
     pub(crate) fn push(&mut self, data: &'mem mut [u8], dmatag: u32) {
         self.push_descriptor(Descriptor::new(data.as_mut_ptr(), sz(data.len()), dmatag));
     }
+}
+
+/// Encodes `n` ignored trailing bytes into a dmatag (bits [12:8]).
+/// The engine will process the full buffer but treat the last `n` bytes as zero-padding.
+pub(crate) const fn dmatag_ign(n: usize) -> u32 {
+    (n as u32) << 8
 }
 
 /// Asserts that size is a multiple of 4, and ORs in the DMA_REALIGN constant.
