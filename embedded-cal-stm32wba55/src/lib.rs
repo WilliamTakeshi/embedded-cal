@@ -2,8 +2,7 @@
 
 use embedded_cal::plumbing::hash::SHA2SHORT_BLOCK_SIZE;
 use stm32_metapac::{
-    aes,
-    hash,
+    aes, hash,
     rcc::{self, vals::Rngsel},
     rng::{
         self,
@@ -40,7 +39,12 @@ impl Stm32wba55Cal {
             w.set_aesen(true);
         });
 
-        let mut cal = Self { hash, rcc, rng, aes };
+        let mut cal = Self {
+            hash,
+            rcc,
+            rng,
+            aes,
+        };
         cal.init_rng().expect("RNG init failed");
         cal
     }
