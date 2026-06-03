@@ -64,4 +64,9 @@ mod tests {
     fn test_tryrng(state: &mut super::TestState) {
         embedded_cal::test_tryrng(&mut state.cal);
     }
+
+    #[test]
+    fn test_aead_aesccm_16_64_128(state: &mut super::TestState) {
+        testvectors::test_aead_aesccm_16_64_128(&mut state.raw);
+    }
 }

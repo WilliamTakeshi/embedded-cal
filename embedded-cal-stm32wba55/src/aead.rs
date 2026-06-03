@@ -48,6 +48,20 @@ impl AsRef<[u8]> for AeadTag {
     }
 }
 
+/// Feed one 16-byte block into the AES DINR and wait for CCF, then clear it.
+fn feed_block(aes: &stm32_metapac::aes::Aes, block: &[u8; 16]) {
+    for i in 0..4 {
+        aes.dinr().write_value(u32::from_be_bytes([
+            block[i * 4],
+            block[i * 4 + 1],
+            block[i * 4 + 2],
+            block[i * 4 + 3],
+        ]));
+    }
+    while !aes.isr().read().ccf() {}
+    aes.isr().write(|w| w.set_ccf(true));
+}
+
 impl embedded_cal::AeadProvider for super::Stm32wba55Cal {
     type Algorithm = AeadAlgorithm;
     type Key = AeadKey;
@@ -74,129 +88,156 @@ impl embedded_cal::AeadProvider for super::Stm32wba55Cal {
         use stm32_metapac::aes::vals::{Chmod, Datatype, Gcmph, Mode};
 
         match key {
-            AeadKey::AesCcm16_64_128(key) => {
-                // Collect AAD into a contiguous buffer.
-                let mut aad_buf = [0u8; 255];
-                let mut aad_len = 0usize;
-                for chunk in aad.items() {
-                    aad_buf[aad_len..aad_len + chunk.len()].copy_from_slice(chunk);
-                    aad_len += chunk.len();
-                }
+            AeadKey::AesCcm16_64_128(key_bytes) => {
+                const TAG_LEN: usize = 8;
+                let aes = &self.aes;
 
-                // Build B0 per RFC 3610 §2.2: L=2 (2-byte length field), M=8 (tag length).
-                // flags = (has_aad << 6) | ((M-2)/2 << 3) | (L-1) = (has_aad << 6) | 0x19
-                let flags = ((aad_len > 0) as u8) << 6 | 0x19;
-                let mut b0 = [0u8; 16];
-                b0[0] = flags;
-                b0[1..14].copy_from_slice(nonce);
-                b0[14] = (message.len() >> 8) as u8;
-                b0[15] = message.len() as u8;
+                // Total AAD length is needed for B0 Adata flag and B1 length prefix.
+                let a_len: usize = aad.items().map(|s| s.len()).sum();
 
-                // Reset, then configure for CCM encryption.
-                self.aes.cr().write(|w| w.set_iprst(true));
-                self.aes.cr().write(|w| w.set_iprst(false));
-                self.aes.cr().write(|w| {
+                // --- INIT PHASE ---
+                aes.cr().modify(|w| w.set_en(false));
+                aes.cr().modify(|w| {
                     w.set_chmod(Chmod::CCM);
+                    w.set_datatype(Datatype::NONE);
+                    w.set_keysize(false); // false = 128-bit key
                     w.set_mode(Mode::MODE1); // encrypt
-                    w.set_datatype(Datatype::NONE); // 32-bit words, no swap
-                    w.set_keysize(false); // 128-bit key
+                    w.set_kmod(0x00);
                     w.set_gcmph(Gcmph::INIT_PHASE);
                 });
 
-                // Write 128-bit key; keyr[0] = MSW = key[0..4].
-                for i in 0..4 {
-                    self.aes.keyr(i).write_value(u32::from_be_bytes(
-                        key[i * 4..i * 4 + 4].try_into().unwrap(),
-                    ));
+                // Build B0: flags byte | nonce | Q (message length in L bytes)
+                // For AES-CCM-16-64-128: nonce=13 bytes → L=2, M'=3 (tag=8 bytes)
+                let mut b0 = [0u8; 16];
+                let l = 15 - nonce.len();
+                b0[0] = ((l - 1) as u8) | ((((TAG_LEN - 2) / 2) as u8) << 3);
+                if a_len > 0 {
+                    b0[0] |= 0x40;
                 }
-                while !self.aes.sr().read().keyvalid() {}
+                b0[1..1 + nonce.len()].copy_from_slice(nonce);
+                let msg_len_bytes = (message.len() as u64).to_be_bytes();
+                b0[16 - l..].copy_from_slice(&msg_len_bytes[8 - l..]);
 
-                // Phase 0 — Init: write B0 to IVR, trigger.
-                for i in 0..4 {
-                    self.aes.ivr(i).write_value(u32::from_be_bytes(
-                        b0[i * 4..i * 4 + 4].try_into().unwrap(),
-                    ));
-                }
-                self.aes.cr().modify(|w| w.set_en(true));
-                while self.aes.sr().read().busy() {}
+                aes.ivr(3)
+                    .write_value(u32::from_be_bytes([b0[0], b0[1], b0[2], b0[3]]));
+                aes.ivr(2)
+                    .write_value(u32::from_be_bytes([b0[4], b0[5], b0[6], b0[7]]));
+                aes.ivr(1)
+                    .write_value(u32::from_be_bytes([b0[8], b0[9], b0[10], b0[11]]));
+                aes.ivr(0)
+                    .write_value(u32::from_be_bytes([b0[12], b0[13], b0[14], b0[15]]));
 
-                // Phase 1 — Header: encode AAD as [len_hi, len_lo, aad...], padded to 16.
-                if aad_len > 0 {
-                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::HEADER_PHASE));
+                aes.keyr(3).write_value(u32::from_be_bytes([
+                    key_bytes[0],
+                    key_bytes[1],
+                    key_bytes[2],
+                    key_bytes[3],
+                ]));
+                aes.keyr(2).write_value(u32::from_be_bytes([
+                    key_bytes[4],
+                    key_bytes[5],
+                    key_bytes[6],
+                    key_bytes[7],
+                ]));
+                aes.keyr(1).write_value(u32::from_be_bytes([
+                    key_bytes[8],
+                    key_bytes[9],
+                    key_bytes[10],
+                    key_bytes[11],
+                ]));
+                aes.keyr(0).write_value(u32::from_be_bytes([
+                    key_bytes[12],
+                    key_bytes[13],
+                    key_bytes[14],
+                    key_bytes[15],
+                ]));
 
-                    let header_total = 2 + aad_len;
-                    let header_padded = (header_total + 15) / 16 * 16;
-                    // max: 2-byte length + 255 bytes AAD + 15 bytes padding = 272
-                    let mut header = [0u8; 272];
-                    header[0] = (aad_len >> 8) as u8;
-                    header[1] = aad_len as u8;
-                    header[2..2 + aad_len].copy_from_slice(&aad_buf[..aad_len]);
+                while !aes.sr().read().keyvalid() {}
+                aes.cr().modify(|w| w.set_en(true));
+                while !aes.isr().read().ccf() {}
+                aes.isr().write(|w| w.set_ccf(true));
 
-                    for chunk in header[..header_padded].chunks_exact(4) {
-                        self.aes
-                            .dinr()
-                            .write_value(u32::from_be_bytes(chunk.try_into().unwrap()));
-                    }
-                    while self.aes.sr().read().busy() {}
-                }
+                // --- HEADER PHASE ---
+                // B1 = [len_hi, len_lo, aad...] zero-padded to 16-byte blocks.
+                if a_len > 0 {
+                    aes.cr().modify(|w| w.set_gcmph(Gcmph::HEADER_PHASE));
+                    aes.cr().modify(|w| w.set_en(true));
 
-                // Phase 2 — Payload: encrypt message in-place, one 16-byte block at a time.
-                if !message.is_empty() {
-                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::PAYLOAD_PHASE));
+                    let mut block = [0u8; 16];
+                    // 2-byte length encoding (covers a_len < 0xFF00)
+                    block[0] = (a_len >> 8) as u8;
+                    block[1] = (a_len & 0xFF) as u8;
+                    let mut pos = 2usize;
 
-                    let msg_len = message.len();
-                    let mut offset = 0usize;
-                    while offset < msg_len {
-                        let block_end = (offset + 16).min(msg_len);
-
-                        // Set NPBLB before the last partial block so the hardware
-                        // pads the CBC-MAC correctly without encrypting the padding.
-                        if block_end == msg_len {
-                            let remainder = msg_len % 16;
-                            if remainder != 0 {
-                                self.aes
-                                    .cr()
-                                    .modify(|w| w.set_npblb((16 - remainder) as u8));
+                    for slice in aad.items() {
+                        let mut slice_offset = 0;
+                        while slice_offset < slice.len() {
+                            let n = (slice.len() - slice_offset).min(16 - pos);
+                            block[pos..pos + n]
+                                .copy_from_slice(&slice[slice_offset..slice_offset + n]);
+                            pos += n;
+                            slice_offset += n;
+                            if pos == 16 {
+                                feed_block(aes, &block);
+                                block = [0u8; 16];
+                                pos = 0;
                             }
                         }
-
-                        // Zero-pad plaintext block to 16 bytes and write to DINR.
-                        let mut block = [0u8; 16];
-                        block[..block_end - offset].copy_from_slice(&message[offset..block_end]);
-                        for i in 0..4 {
-                            self.aes.dinr().write_value(u32::from_be_bytes(
-                                block[i * 4..i * 4 + 4].try_into().unwrap(),
-                            ));
-                        }
-                        while self.aes.sr().read().busy() {}
-
-                        // Read 4 output words; only copy the valid bytes back.
-                        for i in 0..4 {
-                            let bytes = self.aes.doutr().read().to_be_bytes();
-                            let dst_start = offset + i * 4;
-                            let dst_end = (dst_start + 4).min(msg_len);
-                            if dst_start < dst_end {
-                                message[dst_start..dst_end]
-                                    .copy_from_slice(&bytes[..dst_end - dst_start]);
-                            }
-                        }
-
-                        offset = block_end;
+                    }
+                    if pos > 0 {
+                        // Partial last block, already zero-padded by array initialization.
+                        feed_block(aes, &block);
                     }
                 }
 
-                // Phase 3 — Final: produce tag.
-                self.aes.cr().modify(|w| w.set_gcmph(Gcmph::FINAL_PHASE));
-                self.aes.cr().modify(|w| w.set_en(true));
-                while self.aes.sr().read().busy() {}
+                // --- PAYLOAD PHASE ---
+                aes.cr().modify(|w| w.set_gcmph(Gcmph::PAYLOAD_PHASE));
+                // EN stays set from header phase; set it here only if header phase was skipped.
+                if a_len == 0 {
+                    aes.cr().modify(|w| w.set_en(true));
+                }
 
-                // Tag occupies ivr[0] (bytes 0..4) and ivr[1] (bytes 4..8).
-                let mut tag = [0u8; 8];
-                tag[0..4].copy_from_slice(&self.aes.ivr(0).read().to_be_bytes());
-                tag[4..8].copy_from_slice(&self.aes.ivr(1).read().to_be_bytes());
+                let msg_len = message.len();
+                let mut msg_offset = 0;
+                while msg_offset < msg_len {
+                    let mut block = [0u8; 16];
+                    let chunk = (msg_len - msg_offset).min(16);
+                    block[..chunk].copy_from_slice(&message[msg_offset..msg_offset + chunk]);
 
-                self.aes.cr().modify(|w| w.set_en(false));
+                    for i in 0..4 {
+                        aes.dinr().write_value(u32::from_be_bytes([
+                            block[i * 4],
+                            block[i * 4 + 1],
+                            block[i * 4 + 2],
+                            block[i * 4 + 3],
+                        ]));
+                    }
+                    while !aes.isr().read().ccf() {}
 
+                    for i in 0..4 {
+                        let word: u32 = aes.doutr().read();
+                        block[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+                    }
+                    aes.isr().write(|w| w.set_ccf(true));
+
+                    message[msg_offset..msg_offset + chunk].copy_from_slice(&block[..chunk]);
+                    msg_offset += chunk;
+                }
+
+                // --- FINAL PHASE ---
+                aes.cr().modify(|w| w.set_gcmph(Gcmph::FINAL_PHASE));
+                while !aes.isr().read().ccf() {}
+
+                let mut tag_full = [0u8; 16];
+                for i in 0..4 {
+                    let word: u32 = aes.doutr().read();
+                    tag_full[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+                }
+                aes.isr().write(|w| w.set_ccf(true));
+                aes.cr().modify(|w| w.set_en(false));
+
+                let mut tag = [0u8; TAG_LEN];
+                tag.copy_from_slice(&tag_full[..TAG_LEN]);
                 AeadTag::AesCcm16_64_128(tag)
             }
             AeadKey::AesCcm16_64_256(_) => todo!(),
@@ -206,142 +247,13 @@ impl embedded_cal::AeadProvider for super::Stm32wba55Cal {
     fn decrypt_in_place(
         &mut self,
         key: &Self::Key,
-        nonce: &[u8],
-        message: &mut [u8],
-        tag: &[u8],
-        aad: impl embedded_cal::AadGenerator,
+        _nonce: &[u8],
+        _message: &mut [u8],
+        _tag: &[u8],
+        _aad: impl embedded_cal::AadGenerator,
     ) -> Result<(), embedded_cal::DecryptionFailed> {
-        use stm32_metapac::aes::vals::{Chmod, Datatype, Gcmph, Mode};
-
         match key {
-            AeadKey::AesCcm16_64_128(key) => {
-                let mut aad_buf = [0u8; 255];
-                let mut aad_len = 0usize;
-                for chunk in aad.items() {
-                    aad_buf[aad_len..aad_len + chunk.len()].copy_from_slice(chunk);
-                    aad_len += chunk.len();
-                }
-
-                let flags = ((aad_len > 0) as u8) << 6 | 0x19;
-                let mut b0 = [0u8; 16];
-                b0[0] = flags;
-                b0[1..14].copy_from_slice(nonce);
-                b0[14] = (message.len() >> 8) as u8;
-                b0[15] = message.len() as u8;
-
-                self.aes.cr().write(|w| w.set_iprst(true));
-                self.aes.cr().write(|w| w.set_iprst(false));
-                self.aes.cr().write(|w| {
-                    w.set_chmod(Chmod::CCM);
-                    w.set_mode(Mode::MODE3); // decrypt
-                    w.set_datatype(Datatype::NONE);
-                    w.set_keysize(false);
-                    w.set_gcmph(Gcmph::INIT_PHASE);
-                });
-
-                for i in 0..4 {
-                    self.aes.keyr(i).write_value(u32::from_be_bytes(
-                        key[i * 4..i * 4 + 4].try_into().unwrap(),
-                    ));
-                }
-                while !self.aes.sr().read().keyvalid() {}
-
-                // Phase 0 — Init
-                for i in 0..4 {
-                    self.aes.ivr(i).write_value(u32::from_be_bytes(
-                        b0[i * 4..i * 4 + 4].try_into().unwrap(),
-                    ));
-                }
-                self.aes.cr().modify(|w| w.set_en(true));
-                while self.aes.sr().read().busy() {}
-
-                // Phase 1 — Header
-                if aad_len > 0 {
-                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::HEADER_PHASE));
-
-                    let header_total = 2 + aad_len;
-                    let header_padded = (header_total + 15) / 16 * 16;
-                    let mut header = [0u8; 272];
-                    header[0] = (aad_len >> 8) as u8;
-                    header[1] = aad_len as u8;
-                    header[2..2 + aad_len].copy_from_slice(&aad_buf[..aad_len]);
-
-                    for chunk in header[..header_padded].chunks_exact(4) {
-                        self.aes
-                            .dinr()
-                            .write_value(u32::from_be_bytes(chunk.try_into().unwrap()));
-                    }
-                    while self.aes.sr().read().busy() {}
-                }
-
-                // Phase 2 — Payload: decrypt in-place
-                if !message.is_empty() {
-                    self.aes.cr().modify(|w| w.set_gcmph(Gcmph::PAYLOAD_PHASE));
-
-                    let msg_len = message.len();
-                    let mut offset = 0usize;
-                    while offset < msg_len {
-                        let block_end = (offset + 16).min(msg_len);
-
-                        if block_end == msg_len {
-                            let remainder = msg_len % 16;
-                            if remainder != 0 {
-                                self.aes
-                                    .cr()
-                                    .modify(|w| w.set_npblb((16 - remainder) as u8));
-                            }
-                        }
-
-                        let mut block = [0u8; 16];
-                        block[..block_end - offset].copy_from_slice(&message[offset..block_end]);
-                        for i in 0..4 {
-                            self.aes.dinr().write_value(u32::from_be_bytes(
-                                block[i * 4..i * 4 + 4].try_into().unwrap(),
-                            ));
-                        }
-                        while self.aes.sr().read().busy() {}
-
-                        for i in 0..4 {
-                            let bytes = self.aes.doutr().read().to_be_bytes();
-                            let dst_start = offset + i * 4;
-                            let dst_end = (dst_start + 4).min(msg_len);
-                            if dst_start < dst_end {
-                                message[dst_start..dst_end]
-                                    .copy_from_slice(&bytes[..dst_end - dst_start]);
-                            }
-                        }
-
-                        offset = block_end;
-                    }
-                }
-
-                // Phase 3 — Final: compute tag over the decrypted payload
-                self.aes.cr().modify(|w| w.set_gcmph(Gcmph::FINAL_PHASE));
-                self.aes.cr().modify(|w| w.set_en(true));
-                while self.aes.sr().read().busy() {}
-
-                let mut computed_tag = [0u8; 8];
-                computed_tag[0..4].copy_from_slice(&self.aes.ivr(0).read().to_be_bytes());
-                computed_tag[4..8].copy_from_slice(&self.aes.ivr(1).read().to_be_bytes());
-
-                self.aes.cr().modify(|w| w.set_en(false));
-
-                // Constant-time comparison to prevent timing side-channels.
-                let mut diff = 0u8;
-                for (a, b) in computed_tag.iter().zip(tag.iter()) {
-                    diff |= a ^ b;
-                }
-                // Unlike the nRF54 implementation (which decrypts into a temporary
-                // buffer and only copies to `message` after verification), plaintext
-                // is written directly to `message` during Phase 2. Zero it on failure
-                // so unauthenticated plaintext is never visible to the caller.
-                if diff != 0 {
-                    message.fill(0);
-                    return Err(embedded_cal::DecryptionFailed);
-                }
-
-                Ok(())
-            }
+            AeadKey::AesCcm16_64_128(_) => todo!(),
             AeadKey::AesCcm16_64_256(_) => todo!(),
         }
     }
