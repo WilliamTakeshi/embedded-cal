@@ -3,6 +3,7 @@
 use embedded_cal::plumbing::hash::SHA2SHORT_BLOCK_SIZE;
 use stm32_metapac::{
     hash,
+    pka,
     rcc::{self, vals::Rngsel},
     rng::{
         self,
@@ -10,6 +11,7 @@ use stm32_metapac::{
     },
 };
 mod aead;
+mod dh;
 mod try_rng;
 
 const WORD_SIZE: usize = 4;
@@ -22,23 +24,31 @@ pub struct Stm32wba55Cal {
     hash: hash::Hash,
     rcc: rcc::Rcc,
     rng: rng::Rng,
+    pka: pka::Pka,
 }
 
 impl embedded_cal::Cal for Stm32wba55Cal {}
 
 impl Stm32wba55Cal {
-    pub fn new(hash: hash::Hash, rcc: rcc::Rcc, rng: rng::Rng) -> Self {
+    pub fn new(hash: hash::Hash, rcc: rcc::Rcc, rng: rng::Rng, pka: pka::Pka) -> Self {
         // Select HSI as the RNG kernel clock source (default is LSE which may not be running)
         rcc.ccipr2().modify(|w| w.set_rngsel(Rngsel::HSI));
 
-        // Enable HASH and RNG clocks
+        // Enable HASH, RNG, and PKA clocks
         rcc.ahb2enr().modify(|w| {
             w.set_hashen(true);
             w.set_rngen(true);
+            w.set_pkaen(true);
         });
 
-        let mut cal = Self { hash, rcc, rng };
+        let mut cal = Self { hash, rcc, rng, pka };
         cal.init_rng().expect("RNG init failed");
+
+        // PKA INITOK depends on the RNG being operational; initialize after RNG is ready.
+        cal.pka.cr().modify(|w| w.set_en(false));
+        cal.pka.cr().modify(|w| w.set_en(true));
+        while !cal.pka.sr().read().initok() {}
+
         cal
     }
 
@@ -107,9 +117,12 @@ fn wait_for(mut condition: impl FnMut() -> bool) -> Result<(), try_rng::RngError
 
 impl Drop for Stm32wba55Cal {
     fn drop(&mut self) {
-        // Disable HASH clock
-        self.rcc.ahb2enr().modify(|w| w.set_hashen(false));
         self.rng.cr().modify(|w| w.set_rngen(false));
+        self.pka.cr().modify(|w| w.set_en(false));
+        self.rcc.ahb2enr().modify(|w| {
+            w.set_hashen(false);
+            w.set_pkaen(false);
+        });
     }
 }
 
