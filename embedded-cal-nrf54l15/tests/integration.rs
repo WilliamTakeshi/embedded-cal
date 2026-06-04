@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn bench_aead(state: &mut super::TestState) {
-        const ITERS: u32 = 1_000;
+        const ITERS: u32 = 10_000;
 
         // Enable DWT cycle counter (Cortex-M33): set DEMCR.TRCENA, reset CYCCNT, set CTRL.CYCCNTENA
         unsafe {
@@ -94,6 +94,9 @@ mod tests {
             .load_from_keydata(AeadAlgorithm::AesCcm16_64_128, &[0xABu8; 16]);
         let nonce = [0x01u8; 13];
         let aad = [0x02u8; 8];
+
+        // Just to make sure everything is working
+        testvectors::test_aead_aesccm_16_64_128(&mut state.raw);
 
         // AesCcm16_64_128 encrypt
         {

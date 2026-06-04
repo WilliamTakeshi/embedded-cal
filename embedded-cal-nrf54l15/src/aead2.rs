@@ -68,8 +68,8 @@ const DMATAG_AES_DATA: u32 = DMATAG_BA411; // plaintext / ciphertext / tag → 0
 // Key size is NOT encoded here — the BA411E infers it from the byte count of the
 // key descriptor (16 bytes → AES-128, 32 bytes → AES-256).
 const AES_CCM_MODE: u32 = 1 << 13; // CMDMA_AEAD_MODE_SET(5)
-const AES_CMD_CCM_256_ENCRYPT: u32 = AES_CCM_MODE; // 0x2000
-const AES_CMD_CCM_256_DECRYPT: u32 = AES_CCM_MODE | 1; // 0x2001
+const AES_CMD_CCM_ENCRYPT: u32 = AES_CCM_MODE; // 0x2000
+const AES_CMD_CCM_DECRYPT: u32 = AES_CCM_MODE | 1; // 0x2001
 
 use crate::descriptor::{DescriptorChain, Input, Output, dmatag_ign};
 
@@ -194,15 +194,15 @@ impl super::Nrf54l15Cal {
             .write_value(u32::from_be_bytes(key[0..4].try_into().unwrap()));
     }
 
-    fn ccm256_encrypt(
+    fn ccm_encrypt<const KEY_LEN: usize>(
         &mut self,
-        key: &[u8; 32],
+        key: &[u8; KEY_LEN],
         nonce: &[u8],
         message: &mut [u8],
         aad: &[u8],
     ) -> [u8; 8] {
         const TAG_LEN: usize = 8;
-        let cmd = AES_CMD_CCM_256_ENCRYPT.to_le_bytes();
+        let cmd = AES_CMD_CCM_ENCRYPT.to_le_bytes();
 
         // Header = B0 (16 B) + [aad_len_be (2 B) + aad] when AAD present,
         // zero-padded to the next 16-byte multiple.
@@ -267,16 +267,16 @@ impl super::Nrf54l15Cal {
         tag
     }
 
-    fn ccm256_decrypt(
+    fn ccm_decrypt<const KEY_LEN: usize>(
         &mut self,
-        key: &[u8; 32],
+        key: &[u8; KEY_LEN],
         nonce: &[u8],
         ciphertext: &mut [u8],
         tag_in: &[u8],
         aad: &[u8],
     ) -> bool {
         const TAG_LEN: usize = 8;
-        let cmd = AES_CMD_CCM_256_DECRYPT.to_le_bytes();
+        let cmd = AES_CMD_CCM_DECRYPT.to_le_bytes();
 
         let b0 = embedded_cal::build_b0(nonce, ciphertext.len(), aad.len(), TAG_LEN);
         let mut header_buf = [0u8; 288];
@@ -364,64 +364,15 @@ impl embedded_cal::AeadProvider for super::Nrf54l15Cal {
         message: &mut [u8],
         aad: impl embedded_cal::AadGenerator,
     ) -> Self::Tag {
-        use nrf_pac::ccm::vals;
-
         match *key {
-            AeadKey::AesCcm16_64_128(key) => {
-                self.ccm_setup(vals::Mode::ENCRYPTION);
-
-                let (aad_input_buf, aad_len) = collect_aad(aad);
-
-                let alen_input_buf = (aad_len as u32).to_le_bytes();
-                let mlen_input_buf = (message.len() as u32).to_le_bytes();
-
-                let mut input_jobs = [
-                    EcbJob::new(alen_input_buf.as_ptr(), 2, EcbJobAttr::Alen),
-                    EcbJob::new(mlen_input_buf.as_ptr(), 2, EcbJobAttr::Mlen),
-                    EcbJob::new(aad_input_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
-                    EcbJob::new(message.as_ptr(), message.len() as u8, EcbJobAttr::Mdata),
-                    EcbJob::zero(),
-                ];
-
-                let alen_output_buf = (aad_len as u32).to_le_bytes();
-                let mlen_output_buf = (message.len() as u32).to_le_bytes();
-                let aad_output_buf = [0x00; 256];
-                let mut output_buf = [0x00; 256];
-
-                let mut output_jobs = [
-                    EcbJob::new(alen_output_buf.as_ptr(), 2, EcbJobAttr::Alen),
-                    EcbJob::new(mlen_output_buf.as_ptr(), 2, EcbJobAttr::Mlen),
-                    EcbJob::new(aad_output_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
-                    EcbJob::new(
-                        output_buf.as_mut_ptr(),
-                        (message.len() + 8) as u8,
-                        EcbJobAttr::Mdata,
-                    ),
-                    EcbJob::zero(),
-                ];
-
-                let input_jobs_ptr = core::ptr::addr_of_mut!(input_jobs) as u32;
-                let output_jobs_ptr = core::ptr::addr_of_mut!(output_jobs) as u32;
-
-                self.ccm_write_key(&key);
-                self.ccm_write_nonce(nonce);
-
-                self.ccm.in_().ptr().write_value(input_jobs_ptr);
-                self.ccm.out().ptr().write_value(output_jobs_ptr);
-
-                self.ccm_run();
-                self.ccm
-                    .enable()
-                    .write(|w| w.set_enable(vals::Enable::DISABLED));
-
-                let mut tag = [0u8; 8];
-                message.copy_from_slice(&output_buf[..message.len()]);
-                tag.copy_from_slice(&output_buf[message.len()..message.len() + 8]);
+            AeadKey::AesCcm16_64_128(key_bytes) => {
+                let (aad_buf, aad_len) = collect_aad(aad);
+                let tag = self.ccm_encrypt(&key_bytes, nonce, message, &aad_buf[..aad_len]);
                 AeadTag::AesCcm16_64_128(tag)
             }
             AeadKey::AesCcm16_64_256(key_bytes) => {
                 let (aad_buf, aad_len) = collect_aad(aad);
-                let tag = self.ccm256_encrypt(&key_bytes, nonce, message, &aad_buf[..aad_len]);
+                let tag = self.ccm_encrypt(&key_bytes, nonce, message, &aad_buf[..aad_len]);
                 AeadTag::AesCcm16_64_256(tag)
             }
         }
@@ -435,77 +386,18 @@ impl embedded_cal::AeadProvider for super::Nrf54l15Cal {
         tag: &[u8],
         aad: impl embedded_cal::AadGenerator,
     ) -> Result<(), embedded_cal::DecryptionFailed> {
-        use nrf_pac::ccm::vals;
-
         match *key {
-            AeadKey::AesCcm16_64_128(key) => {
-                self.ccm_setup(vals::Mode::FAST_DECRYPTION);
-
+            AeadKey::AesCcm16_64_128(key_bytes) => {
                 let (aad_buf, aad_len) = collect_aad(aad);
-
-                let alen_input_buf = (aad_len as u32).to_le_bytes();
-                let ciphertext_tag_len = cyphertext.len() + 8;
-                let mlen_input_buf = (ciphertext_tag_len as u32).to_le_bytes();
-
-                let mut ciphertext_tag_buf = [0u8; 256];
-                ciphertext_tag_buf[..cyphertext.len()].copy_from_slice(cyphertext);
-                ciphertext_tag_buf[cyphertext.len()..ciphertext_tag_len].copy_from_slice(tag);
-
-                let mut input_jobs: [EcbJob; 5] = [
-                    EcbJob::new(alen_input_buf.as_ptr(), 2, EcbJobAttr::Alen),
-                    EcbJob::new(mlen_input_buf.as_ptr(), 2, EcbJobAttr::Mlen),
-                    EcbJob::new(aad_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
-                    EcbJob::new(
-                        ciphertext_tag_buf.as_ptr(),
-                        ciphertext_tag_len as u8,
-                        EcbJobAttr::Mdata,
-                    ),
-                    EcbJob::zero(),
-                ];
-
-                let alen_output_buf = (aad_len as u32).to_le_bytes();
-                let mlen_output_buf = (cyphertext.len() as u32).to_le_bytes();
-                let aad_out_buf = [0u8; 255];
-                let mut plaintext_buf = [0u8; 263];
-
-                // Decrypt output mirrors encrypt INPUT order: Adata=AAD, Mdata=plaintext.
-                let mut output_jobs: [EcbJob; 5] = [
-                    EcbJob::new(alen_output_buf.as_ptr(), 2, EcbJobAttr::Alen),
-                    EcbJob::new(mlen_output_buf.as_ptr(), 2, EcbJobAttr::Mlen),
-                    EcbJob::new(aad_out_buf.as_ptr(), aad_len as u8, EcbJobAttr::Adata),
-                    EcbJob::new(
-                        plaintext_buf.as_mut_ptr(),
-                        cyphertext.len() as u8,
-                        EcbJobAttr::Mdata,
-                    ),
-                    EcbJob::zero(),
-                ];
-
-                let input_jobs_ptr = core::ptr::addr_of_mut!(input_jobs) as u32;
-                let output_jobs_ptr = core::ptr::addr_of_mut!(output_jobs) as u32;
-
-                self.ccm_write_key(&key);
-                self.ccm_write_nonce(nonce);
-
-                self.ccm.in_().ptr().write_value(input_jobs_ptr);
-                self.ccm.out().ptr().write_value(output_jobs_ptr);
-
-                let mac_ok = self.ccm_run();
-                self.ccm
-                    .enable()
-                    .write(|w| w.set_enable(vals::Enable::DISABLED));
-
-                if !mac_ok {
-                    return Err(embedded_cal::DecryptionFailed);
+                if self.ccm_decrypt(&key_bytes, nonce, cyphertext, tag, &aad_buf[..aad_len]) {
+                    Ok(())
+                } else {
+                    Err(embedded_cal::DecryptionFailed)
                 }
-
-                // Message should only be copied after the verification
-                cyphertext.copy_from_slice(&plaintext_buf[..cyphertext.len()]);
-                Ok(())
             }
             AeadKey::AesCcm16_64_256(key_bytes) => {
                 let (aad_buf, aad_len) = collect_aad(aad);
-                if self.ccm256_decrypt(&key_bytes, nonce, cyphertext, tag, &aad_buf[..aad_len]) {
+                if self.ccm_decrypt(&key_bytes, nonce, cyphertext, tag, &aad_buf[..aad_len]) {
                     Ok(())
                 } else {
                     Err(embedded_cal::DecryptionFailed)
