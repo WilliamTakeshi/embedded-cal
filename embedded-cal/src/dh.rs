@@ -21,6 +21,17 @@ pub trait DhProvider {
     type PublicKey: Sized;
     type SharedSecret: SharedSecret;
 
+    /// Constructs a secret key from raw scalar bytes.
+    fn load_secret_key(&mut self, alg: Self::DhAlgorithm, bytes: &[u8]) -> Self::SecretKey;
+
+    /// Constructs a public key from affine coordinates.
+    fn load_public_key(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        x: &[u8],
+        y: &[u8],
+    ) -> Self::PublicKey;
+
     /// Derives a shared secret from a public and a private key.
     ///
     /// # Errors

@@ -87,6 +87,57 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
+impl DhAlgorithm for NoAlgorithms {
+    fn output_length(&self) -> usize {
+        match *self {}
+    }
+}
+
+impl SharedSecret for NoAlgorithms {
+    fn raw_secret_bytes<C>(&self, _cal: &mut C) -> impl AsRef<[u8]>
+    where
+        C: DhProvider<SharedSecret = Self>,
+    {
+        #[allow(unreachable_code)]
+        {
+            let _bytes: &[u8] = match *self {};
+            _bytes
+        }
+    }
+}
+
+impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+    type DhAlgorithm = NoAlgorithms;
+    type SecretKey = NoAlgorithms;
+    type PublicKey = NoAlgorithms;
+    type SharedSecret = NoAlgorithms;
+
+    fn load_secret_key(&mut self, alg: Self::DhAlgorithm, _bytes: &[u8]) -> Self::SecretKey {
+        match alg {}
+    }
+
+    fn load_public_key(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _x: &[u8],
+        _y: &[u8],
+    ) -> Self::PublicKey {
+        match alg {}
+    }
+
+    fn shared_secret(
+        &mut self,
+        private: &Self::SecretKey,
+        _public: &Self::PublicKey,
+    ) -> Result<Self::SharedSecret, IncompatibleKeys> {
+        match *private {}
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+}
+
 impl<const PLUMBING: bool> rand_core::TryCryptoRng for EmptyCal<PLUMBING> {}
 
 impl<const PLUMBING: bool> rand_core::TryRng for EmptyCal<PLUMBING> {
