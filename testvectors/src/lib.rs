@@ -204,3 +204,50 @@ pub fn test_aead_aesccm_16_64_128(cal: &mut impl embedded_cal::AeadProvider) {
         case.test(cal);
     }
 }
+
+pub struct EcdhCase {
+    pub d: &'static [u8],
+    pub peer_qx: &'static [u8],
+    pub peer_qy: &'static [u8],
+    pub expected_z: &'static [u8],
+}
+
+/// ECDH P-256 test vectors from NIST CAVP "ECC CDH Component" suite.
+///
+/// Source: <https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/components/ecccdhtestvectors.zip>
+pub const ECDH_P256: &[EcdhCase] = &[
+    // COUNT 0
+    EcdhCase {
+        d: &hex!("7d7dc5f71eb29ddaf80d6214632eeae03d9058af1fb6d22ed80badb62bc1a534"),
+        peer_qx: &hex!("700c48f77f56584c5cc632ca65640db91b6bacce3a4df6b42ce7cc838833d287"),
+        peer_qy: &hex!("db71e509e3fd9b060ddb20ba5c51dcc5948d46fbf640dfe0441782cab85fa4ac"),
+        expected_z: &hex!("46fc62106420ff012e54a434fbdd2d25ccc5852060561e68040dd7778997bd7b"),
+    },
+    // COUNT 1
+    EcdhCase {
+        d: &hex!("38f65d6dce47676044d58ce5139582d568f64bb16098d179dbab07741dd5caf5"),
+        peer_qx: &hex!("809f04289c64348c01515eb03d5ce7ac1a8cb9498f5caa50197e58d43a86a7ae"),
+        peer_qy: &hex!("b29d84e811197f25eba8f5194092cb6ff440e26d4421011372461f579271cda3"),
+        expected_z: &hex!("057d636096cb80b67a8c038c890e887d1adfa4195e9b3ce241c8a778c59cda67"),
+    },
+];
+
+pub fn test_dh_ecdh_p256<C: embedded_cal::DhProvider>(cal: &mut C) {
+    use embedded_cal::{DhAlgorithm, SharedSecret as _};
+
+    let alg = C::DhAlgorithm::from_cose_ecdh(1i8)
+        .expect("DhProvider must recognize COSE ECDH on P-256 (curve 1)");
+
+    for case in ECDH_P256 {
+        let private = cal.load_secret_key(alg.clone(), case.d);
+        let public = cal.load_public_key(alg.clone(), case.peer_qx, case.peer_qy);
+        let shared = cal
+            .shared_secret(&private, &public)
+            .expect("keys are for the same algorithm");
+        assert_eq!(
+            shared.raw_secret_bytes(cal).as_ref(),
+            case.expected_z,
+            "ECDH shared secret mismatch"
+        );
+    }
+}
