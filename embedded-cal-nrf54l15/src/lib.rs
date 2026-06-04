@@ -1,5 +1,8 @@
 #![no_std]
+// Swap this path to "aead2.rs" to benchmark the alternative implementation.
+#[path = "aead2.rs"]
 mod aead;
+pub use aead::AeadAlgorithm;
 mod descriptor;
 mod try_rng;
 
