@@ -234,6 +234,110 @@ impl embedded_cal::AeadProvider for RustcryptoCal {
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum DhAlgorithm {
+    EcdhP256,
+}
+
+impl embedded_cal::DhAlgorithm for DhAlgorithm {
+    fn output_length(&self) -> usize {
+        match self {
+            DhAlgorithm::EcdhP256 => 32,
+        }
+    }
+
+    fn from_cose_ecdh(curve: impl Into<i128>) -> Option<Self> {
+        match curve.into() {
+            1 => Some(DhAlgorithm::EcdhP256),
+            _ => None,
+        }
+    }
+}
+
+pub struct DhSecretKey {
+    alg: DhAlgorithm,
+    bytes: [u8; 32],
+}
+
+pub struct DhPublicKey {
+    alg: DhAlgorithm,
+    x: [u8; 32],
+    y: [u8; 32],
+}
+
+pub struct DhSharedSecret([u8; 32]);
+
+impl embedded_cal::SharedSecret for DhSharedSecret {
+    fn raw_secret_bytes<C>(&self, _cal: &mut C) -> impl AsRef<[u8]>
+    where
+        C: embedded_cal::DhProvider<SharedSecret = Self>,
+    {
+        &self.0
+    }
+}
+
+impl embedded_cal::DhProvider for RustcryptoCal {
+    type DhAlgorithm = DhAlgorithm;
+    type SecretKey = DhSecretKey;
+    type PublicKey = DhPublicKey;
+    type SharedSecret = DhSharedSecret;
+
+    fn load_secret_key(&mut self, alg: Self::DhAlgorithm, bytes: &[u8]) -> Self::SecretKey {
+        DhSecretKey {
+            alg,
+            bytes: bytes.try_into().expect("secret key must be 32 bytes for P-256"),
+        }
+    }
+
+    fn load_public_key(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        x: &[u8],
+        y: &[u8],
+    ) -> Self::PublicKey {
+        DhPublicKey {
+            alg,
+            x: x.try_into().expect("public key x must be 32 bytes for P-256"),
+            y: y.try_into().expect("public key y must be 32 bytes for P-256"),
+        }
+    }
+
+    fn shared_secret(
+        &mut self,
+        private: &Self::SecretKey,
+        public: &Self::PublicKey,
+    ) -> Result<Self::SharedSecret, embedded_cal::IncompatibleKeys> {
+        if private.alg != public.alg {
+            return Err(embedded_cal::IncompatibleKeys);
+        }
+        let secret = p256::SecretKey::from_bytes((&private.bytes).into())
+            .expect("secret key bytes are a valid P-256 scalar");
+        // Uncompressed point: 0x04 || x || y
+        let mut uncompressed = [0u8; 65];
+        uncompressed[0] = 0x04;
+        uncompressed[1..33].copy_from_slice(&public.x);
+        uncompressed[33..65].copy_from_slice(&public.y);
+        let peer = p256::PublicKey::from_sec1_bytes(&uncompressed)
+            .expect("public key coordinates are a valid P-256 point");
+        let shared = p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), peer.as_affine());
+        Ok(DhSharedSecret(
+            shared.raw_secret_bytes().as_slice().try_into().unwrap(),
+        ))
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        let secret = p256::SecretKey::from_bytes((&private.bytes).into())
+            .expect("secret key bytes are a valid P-256 scalar");
+        let point = secret.public_key();
+        let encoded = p256::EncodedPoint::from(&point);
+        DhPublicKey {
+            alg: private.alg.clone(),
+            x: encoded.x().expect("not the identity point").as_slice().try_into().unwrap(),
+            y: encoded.y().expect("not the identity point and not compressed").as_slice().try_into().unwrap(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +357,12 @@ mod tests {
         let mut cal = RustcryptoCal::new();
 
         testvectors::test_aead_aesccm_16_64_128(&mut cal);
+    }
+
+    #[test]
+    fn test_dh_ecdh_p256() {
+        embedded_cal::test_dh_algorithm_ecdh_p256::<RustcryptoCal>();
+        let mut cal = RustcryptoCal::new();
+        testvectors::test_dh_ecdh_p256(&mut cal);
     }
 }
