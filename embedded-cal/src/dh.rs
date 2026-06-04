@@ -19,7 +19,7 @@ pub trait DhProvider {
     type DhAlgorithm: DhAlgorithm;
     type SecretKey: Sized;
     type PublicKey: Sized;
-    type SharedSecret: Sized + AsRef<[u8]>;
+    type SharedSecret: Sized;
 
     /// Derives a shared secret from a public and a private key.
     ///
@@ -36,6 +36,16 @@ pub trait DhProvider {
 
     /// Produces the public key corresponding to a private key.
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey;
+
+    /// Produces the bytes of the shared secret, in the algorithm's
+    /// [`.output_length()`][DhAlgorithm::output_length()].
+    ///
+    /// The [`SharedSecret`][Self::SharedSecret] itself is *not* `AsRef` itself because the
+    /// implementation may want to not pass out this secret by default (expecting it to be used as
+    /// input to a KDF).
+    // Should we name the return type? That'd enable users to store it -- but *should* it be stored
+    // in the first place?
+    fn raw_secret_bytes(&mut self, secret: &Self::SharedSecret) -> impl AsRef<[u8]>;
 }
 
 /// Error indicating that the public and the private key are incompatible.
