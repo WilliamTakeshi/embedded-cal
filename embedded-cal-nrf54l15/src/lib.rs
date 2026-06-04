@@ -1,6 +1,8 @@
 #![no_std]
 mod aead;
 mod descriptor;
+mod dh;
+mod microcode;
 mod try_rng;
 
 use descriptor::{DescriptorChain, Input, Output};
@@ -25,6 +27,9 @@ impl Nrf54l15Cal {
             w.set_rng(true);
             w.set_pkeikg(true)
         });
+
+        // Load PKE microcode immediately after enabling the PKE/IKG block
+        unsafe { microcode::load() };
 
         // Enable the NDRNG; it stays on until Drop.
         cracen_core
