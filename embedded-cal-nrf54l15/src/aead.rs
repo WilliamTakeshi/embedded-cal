@@ -73,21 +73,6 @@ const AES_CMD_CCM_256_DECRYPT: u32 = AES_CCM_MODE | 1; // 0x2001
 
 use crate::descriptor::{DescriptorChain, Input, Output, dmatag_ign};
 
-/// FIXME: the same as stm32 build_b0. Deduplicate it
-/// Build the CCM B0 block.
-fn build_b0(nonce: &[u8], msg_len: usize, a_len: usize, tag_len: usize) -> [u8; 16] {
-    let mut b0 = [0u8; 16];
-    let l = 15 - nonce.len();
-    b0[0] = ((l - 1) as u8) | (((tag_len - 2) / 2) as u8) << 3;
-    if a_len > 0 {
-        b0[0] |= 0x40;
-    }
-    b0[1..1 + nonce.len()].copy_from_slice(nonce);
-    let msg_len_bytes = (msg_len as u64).to_be_bytes();
-    b0[16 - l..].copy_from_slice(&msg_len_bytes[8 - l..]);
-    b0
-}
-
 fn collect_aad(aad: impl embedded_cal::AadGenerator) -> ([u8; 255], usize) {
     let mut buf = [0u8; 255];
     let mut len: usize = 0;
@@ -222,7 +207,7 @@ impl super::Nrf54l15Cal {
         // Header = B0 (16 B) + [aad_len_be (2 B) + aad] when AAD present,
         // zero-padded to the next 16-byte multiple.
         // Max size: 16 + 2 + 255 = 273 → pads to 288.
-        let b0 = build_b0(nonce, message.len(), aad.len(), TAG_LEN);
+        let b0 = embedded_cal::build_b0(nonce, message.len(), aad.len(), TAG_LEN);
         let mut header_buf = [0u8; 288];
         let header_data_len = if aad.is_empty() {
             header_buf[..16].copy_from_slice(&b0);
@@ -293,7 +278,7 @@ impl super::Nrf54l15Cal {
         const TAG_LEN: usize = 8;
         let cmd = AES_CMD_CCM_256_DECRYPT.to_le_bytes();
 
-        let b0 = build_b0(nonce, ciphertext.len(), aad.len(), TAG_LEN);
+        let b0 = embedded_cal::build_b0(nonce, ciphertext.len(), aad.len(), TAG_LEN);
         let mut header_buf = [0u8; 288];
         let header_data_len = if aad.is_empty() {
             header_buf[..16].copy_from_slice(&b0);

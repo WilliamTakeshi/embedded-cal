@@ -10,7 +10,7 @@ mod rng;
 pub mod plumbing;
 
 pub use aead::{
-    AadGenerator, AeadAlgorithm, AeadProvider, DecryptionFailed,
+    AadGenerator, AeadAlgorithm, AeadProvider, DecryptionFailed, build_b0,
     test_aead_algorithm_aesccm_16_64_128,
 };
 pub use hash::{HashAlgorithm, HashProvider, test_hash_algorithm_sha256};
