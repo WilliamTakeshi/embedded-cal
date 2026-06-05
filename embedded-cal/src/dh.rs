@@ -75,7 +75,10 @@ pub trait DhProvider {
     /// input to a KDF).
     // Should we name the return type? That'd enable users to store it -- but *should* it be stored
     // in the first place?
-    fn raw_secret_bytes(&mut self, secret: &Self::SharedSecret) -> impl AsRef<[u8]>;
+    fn raw_secret_bytes<'s>(
+        &mut self,
+        secret: &'s Self::SharedSecret,
+    ) -> impl AsRef<[u8]> + use<'s, Self>;
 }
 
 /// Error indicating that the public and the private key are incompatible.

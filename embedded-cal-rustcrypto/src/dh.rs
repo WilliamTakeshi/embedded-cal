@@ -47,7 +47,10 @@ impl embedded_cal::DhProvider for RustcryptoCal {
         }
     }
 
-    fn raw_secret_bytes(&mut self, secret: &Self::SharedSecret) -> impl AsRef<[u8]> {
+    fn raw_secret_bytes<'s>(
+        &mut self,
+        secret: &'s Self::SharedSecret,
+    ) -> impl AsRef<[u8]> + use<'s> {
         &secret.0
     }
 }
