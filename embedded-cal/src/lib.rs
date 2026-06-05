@@ -19,4 +19,4 @@ pub use hash::{HashAlgorithm, HashProvider, test_hash_algorithm_sha256};
 pub use hmac::{HmacAlgorithm, HmacProvider, test_hmac_algorithm_hmacsha256};
 pub use rng::test_tryrng;
 
-pub trait Cal: HashProvider + HmacProvider + AeadProvider {}
+pub trait Cal: HashProvider + HmacProvider + AeadProvider + DhProvider {}

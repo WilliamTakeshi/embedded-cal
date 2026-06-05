@@ -87,6 +87,39 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
+impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+    type DhAlgorithm = NoAlgorithms;
+    type VisibleSecretKey = NoAlgorithms;
+    type SecretKey = NoAlgorithms;
+    type PublicKey = NoAlgorithms;
+    type SharedSecret = NoAlgorithms;
+
+    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Option<Self::VisibleSecretKey>
+    where
+        Self: rand_core::TryRng,
+    {
+        match alg {}
+    }
+
+    fn shared_secret(
+        &mut self,
+        private: &Self::SecretKey,
+        _public: &Self::PublicKey,
+    ) -> Result<Self::SharedSecret, IncompatibleKeys> {
+        match *private {}
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn raw_secret_bytes(&mut self, secret: &Self::SharedSecret) -> impl AsRef<[u8]> {
+        match *secret {};
+        &[]
+    }
+}
+
 impl<const PLUMBING: bool> rand_core::TryCryptoRng for EmptyCal<PLUMBING> {}
 
 impl<const PLUMBING: bool> rand_core::TryRng for EmptyCal<PLUMBING> {
@@ -166,6 +199,12 @@ impl HmacAlgorithm for NoAlgorithms {
 
 impl AsRef<[u8]> for NoAlgorithms {
     fn as_ref(&self) -> &[u8] {
+        match *self {}
+    }
+}
+
+impl DhAlgorithm for NoAlgorithms {
+    fn output_length(&self) -> usize {
         match *self {}
     }
 }

@@ -258,6 +258,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-cal",
  "libcrux-sha2",
+ "rand_core",
  "testvectors",
 ]
 

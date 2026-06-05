@@ -58,3 +58,36 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
         match *key {}
     }
 }
+
+impl<EC: ExtenderConfig> embedded_cal::DhProvider for Extender<EC> {
+    type DhAlgorithm = embedded_cal::empty::NoAlgorithms;
+    type VisibleSecretKey = embedded_cal::empty::NoAlgorithms;
+    type SecretKey = embedded_cal::empty::NoAlgorithms;
+    type PublicKey = embedded_cal::empty::NoAlgorithms;
+    type SharedSecret = embedded_cal::empty::NoAlgorithms;
+
+    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Option<Self::VisibleSecretKey>
+    where
+        Self: rand_core::TryRng,
+    {
+        match alg {}
+    }
+
+    fn shared_secret(
+        &mut self,
+        private: &Self::SecretKey,
+        _public: &Self::PublicKey,
+    ) -> Result<Self::SharedSecret, embedded_cal::IncompatibleKeys> {
+        match *private {}
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn raw_secret_bytes(&mut self, secret: &Self::SharedSecret) -> impl AsRef<[u8]> {
+        match *secret {};
+        &[]
+    }
+}
