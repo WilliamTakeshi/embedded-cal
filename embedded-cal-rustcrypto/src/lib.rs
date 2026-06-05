@@ -1,5 +1,6 @@
 mod dh;
 mod hmac;
+mod rng;
 
 use digest::Digest;
 

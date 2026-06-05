@@ -19,10 +19,10 @@ sha2 = { version = "0.10.9", default-features = false }
 testvectors.path = "../testvectors"
 zeroize = { version = "1.8.2", default-features = false }
 
-# FIXME: This makes it currently unusable on embedded -- but otherwise, we
-# can't generate keys. A better way might be to follow lakers and make it
-# generic over a CryptoRng.
-rand = "0.8.0"
+getrandom = { version = "0.4", default-features = false }
+rand_core.workspace = true
+# needed for p256 generation
+rand_core_06 = { package = "rand_core", version = "0.6" }
 
 [features]
 ## Enables the use of the system allocator for AEAD algorithms.
