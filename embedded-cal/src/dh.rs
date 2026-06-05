@@ -17,9 +17,39 @@
 ///   have legitimate use cases for static-static key derivations.
 pub trait DhProvider {
     type DhAlgorithm: DhAlgorithm;
+    /// A secret key that is intended to be exported.
+    ///
+    /// It is recommended (but not required) that this is not just [`SecretKey`][Self::SecretKey]
+    /// but at least a newtype around it; otherwise, users with knowledge of the concrete
+    /// [`Cal`][super::Cal] type (or who require that `C::SecretKey` is identical to or convertible
+    /// from a `C::VisibleSecretKey`) could just swap them around.
+    ///
+    /// ## Rationale
+    ///
+    /// Visible secret keys are a dedicated type here, compared to the AEAD and HMAC types where
+    /// keys are merely loadable because secret keys have more diverse forms of serialization (eg.
+    /// raw bytes, DER or COSE keys), and because key need generation (and not "just" a fixed
+    /// number of uniformly random bytes that is trivial to generate once and store as part of it).
+    type VisibleSecretKey: Sized + Into<Self::SecretKey>;
     type SecretKey: Sized;
     type PublicKey: Sized;
     type SharedSecret: Sized;
+
+    /// Generates a secret key that is intended to be exported / shared (e.g. to be persisted
+    /// across program executions).
+    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Option<Self::VisibleSecretKey>
+    where
+        // FIXME: https://github.com/lake-rs/embedded-cal/issues/51
+        Self: rand_core::TryRng;
+
+    /// Generates a secret key.
+    fn generate(&mut self, alg: Self::DhAlgorithm) -> Option<Self::SecretKey>
+    where
+        // FIXME: https://github.com/lake-rs/embedded-cal/issues/51
+        Self: rand_core::TryRng,
+    {
+        Some(self.generate_visible(alg)?.into())
+    }
 
     /// Derives a shared secret from a public and a private key.
     ///
