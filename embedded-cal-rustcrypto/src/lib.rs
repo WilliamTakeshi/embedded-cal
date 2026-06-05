@@ -260,4 +260,21 @@ mod tests {
 
         testvectors::test_aead_aesccm_16_64_128(&mut cal);
     }
+
+    #[test]
+    fn test_dh() {
+        use embedded_cal::DhAlgorithm;
+
+        let mut cal = RustcryptoCal::new();
+
+        embedded_cal::test_dh_algorithm_ecdh_p256::<RustcryptoCal>();
+
+        // For lack of loading, we only run a live test
+
+        let p256 = DhAlgorithm::from_cose_ecdh(1).unwrap();
+        let x25519 = DhAlgorithm::from_cose_ecdh(4).unwrap();
+
+        embedded_cal::test_dh_selftest(&mut cal, p256);
+        embedded_cal::test_dh_selftest(&mut cal, x25519);
+    }
 }

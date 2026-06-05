@@ -131,3 +131,17 @@ pub fn test_dh_algorithm_ecdh_p256<DP: DhProvider>() {
     );
     assert_eq!(cose_ecdh_1.output_length(), 32)
 }
+
+pub fn test_dh_selftest<C: crate::Cal + rand_core::TryCryptoRng>(cal: &mut C, alg: C::DhAlgorithm) {
+    let my_secret = cal.generate(alg.clone()).unwrap();
+    let peer_secret = cal.generate(alg).unwrap();
+    let my_public = cal.public_key(&my_secret);
+    let peer_public = cal.public_key(&peer_secret);
+
+    let my_shared_secret = cal.shared_secret(&my_secret, &peer_public).unwrap();
+    let peer_shared_secret = cal.shared_secret(&peer_secret, &my_public).unwrap();
+
+    let my_raw_bytes = cal.raw_secret_bytes(&my_shared_secret);
+    let peer_raw_bytes = cal.raw_secret_bytes(&peer_shared_secret);
+    assert_eq!(my_raw_bytes.as_ref(), peer_raw_bytes.as_ref());
+}
