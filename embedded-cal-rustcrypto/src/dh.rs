@@ -68,6 +68,15 @@ impl embedded_cal::DhAlgorithm for DhAlgorithm {
             DhAlgorithm::X25519 => 32,
         }
     }
+
+    #[inline]
+    fn from_cose_ecdh(curve: impl Into<i128>) -> Option<Self> {
+        Some(match curve.into() {
+            1 => DhAlgorithm::P256,
+            4 => DhAlgorithm::X25519,
+            _ => return None,
+        })
+    }
 }
 
 pub struct VisibleSecretKey(SecretKey);
