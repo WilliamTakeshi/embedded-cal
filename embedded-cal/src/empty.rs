@@ -121,6 +121,82 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         match *secret {};
         &[]
     }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+        match *secretkey {};
+        &[]
+    }
+
+    fn import_secretkey_bytes(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, dh::ImportError> {
+        match alg {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_okp<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<impl AsRef<[u8]> + use<'p, PLUMBING>, dh::ExportError> {
+        match *public {};
+        Ok(&[])
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_ec2<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<
+        (
+            impl AsRef<[u8]> + use<'p, PLUMBING>,
+            impl AsRef<[u8]> + use<'p, PLUMBING>,
+        ),
+        dh::ExportError,
+    > {
+        match *public {};
+        Ok((&[], &[]))
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_ec2_compressed<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<(impl AsRef<[u8]> + use<'p, PLUMBING>, bool), dh::ExportError> {
+        match *public {};
+        Ok((&[], false))
+    }
+
+    fn import_publickey_okp(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _data: &[u8],
+    ) -> Result<Self::PublicKey, dh::ImportError> {
+        match alg {}
+    }
+
+    fn import_publickey_ec2(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _x: &[u8],
+        _y: &[u8],
+    ) -> Result<Self::PublicKey, dh::ImportError> {
+        match alg {}
+    }
+
+    fn import_publickey_ec2_compressed(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _x: &[u8],
+        _y: bool,
+    ) -> Result<Self::PublicKey, dh::ImportError> {
+        match alg {}
+    }
 }
 
 impl<const PLUMBING: bool> rand_core::TryCryptoRng for EmptyCal<PLUMBING> {}

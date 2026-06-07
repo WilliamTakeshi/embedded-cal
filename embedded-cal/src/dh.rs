@@ -15,6 +15,12 @@
 /// - it does not distinguish, on the type level, between an `EphemeralSecret` and a `SecretKey`,
 ///   as some protocols such as [Group OSCORE](https://www.ietf.org/archive/id/draft-ietf-core-oscore-groupcomm-28.html)
 ///   have legitimate use cases for static-static key derivations.
+///
+/// Importing and exporting public keys is a relatively verbose affair, as there is no consistent
+/// byte-like structure for all algorithms. Implementations are expected to provide imports and
+/// exports for every method that is defined for a given algorithm. For example, for P-256, both
+/// export and import in EC2-style format are expected, both with and without coordinate
+/// compression.
 pub trait DhProvider {
     type DhAlgorithm: DhAlgorithm;
     /// A secret key that is intended to be exported.
@@ -50,6 +56,76 @@ pub trait DhProvider {
     {
         Some(self.generate_visible(alg)?.into())
     }
+
+    /// Exposes a visible secret key's secret.
+    ///
+    /// Data is stored in the algorithm's native format. For COSE ECDH, this is the `d` value.
+    ///
+    /// If any algorithms are later added for which there is no straightforward `[u8]`
+    /// representation, other methods may be added.
+    // FIXME: Does this need explicit words of warning?
+    // FIXME: Should we make this fallible on grounds of using the wrong format?
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s, Self>;
+
+    /// Inverse operation of [`.export_secretkey_bytes()`][Self::export_secretkey_bytes()].
+    // FIXME: Should this go directly to SecretKey without being re-exportable?
+    fn import_secretkey_bytes(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, ImportError>;
+
+    /// Exposes a public key's key data, OKP-style, i.e., as defined by the algorithm in COSE.
+    fn export_publickey_okp<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<impl AsRef<[u8]> + use<'p, Self>, ExportError>;
+    /// Exposes a public key's key data, EC2-style, i.e., as an X and a Y coordinate each in SEC1
+    /// encoding with no leading zeros omitted.
+    // FIXME: If we work with compact points anyway, can't we just treat all as bytes? Does the
+    // p256 crate let us use compact points all the way?
+    fn export_publickey_ec2<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<
+        (
+            impl AsRef<[u8]> + use<'p, Self>,
+            impl AsRef<[u8]> + use<'p, Self>,
+        ),
+        ExportError,
+    >;
+    /// Exposes a public key's key data, EC2-style, i.e., as an X coordinate in SEC1 encoding with
+    /// no leading zeros omitted, and true for positive and false for negaive sign of y.
+    fn export_publickey_ec2_compressed<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> Result<(impl AsRef<[u8]> + use<'p, Self>, bool), ExportError>;
+    /// Imports a public key in the inverse operation of
+    /// [`.export_publickey_okp()`][Self::export_publickey_okp()].
+    fn import_publickey_okp(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        data: &[u8],
+    ) -> Result<Self::PublicKey, ImportError>;
+    /// Imports a public key in the inverse operation of
+    /// [`.export_publickey_ec2()`][Self::export_publickey_ec2()].
+    fn import_publickey_ec2(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        x: &[u8],
+        y: &[u8],
+    ) -> Result<Self::PublicKey, ImportError>;
+    /// Imports a public key in the inverse operation of
+    /// [`.export_publickey_ec2_compressed()`][Self::export_publickey_ec2_compressed()].
+    fn import_publickey_ec2_compressed(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        x: &[u8],
+        y: bool,
+    ) -> Result<Self::PublicKey, ImportError>;
 
     /// Derives a shared secret from a public and a private key.
     ///
@@ -92,6 +168,31 @@ impl core::fmt::Display for IncompatibleKeys {
 }
 
 impl core::error::Error for IncompatibleKeys {}
+
+/// Error indicating that a imported key's size does not match the given algorithm, or that the data
+/// was otherwise found flawed.
+#[derive(Debug)]
+pub struct ImportError;
+
+impl core::fmt::Display for ImportError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("data not valid for algorithm")
+    }
+}
+
+impl core::error::Error for ImportError {}
+
+/// Error indicating that a key can not be exported because the wrong data format is selected.
+#[derive(Debug)]
+pub struct ExportError;
+
+impl core::fmt::Display for ExportError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("data shape does not match algorithm")
+    }
+}
+
+impl core::error::Error for ExportError {}
 
 /// An algorithm for diffie-hellman style key establishment.
 ///
