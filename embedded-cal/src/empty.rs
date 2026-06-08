@@ -143,9 +143,9 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> Result<impl AsRef<[u8]> + use<'p, PLUMBING>, dh::ExportError> {
+    ) -> impl AsRef<[u8]> + use<'p, PLUMBING> {
         match *public {};
-        Ok(&[])
+        &[]
     }
     fn import_publickey_bytes(
         &mut self,

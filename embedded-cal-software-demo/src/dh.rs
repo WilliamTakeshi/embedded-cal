@@ -58,9 +58,9 @@ impl<EC: ExtenderConfig> DhProvider for Extender<EC> {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> Result<impl AsRef<[u8]> + use<'p, EC>, embedded_cal::ExportError> {
+    ) -> impl AsRef<[u8]> + use<'p, EC> {
         todo!();
-        Ok(&[])
+        &[]
     }
 
     fn import_publickey_bytes(

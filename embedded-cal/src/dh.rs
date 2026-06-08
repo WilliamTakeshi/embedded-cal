@@ -84,7 +84,7 @@ pub trait DhProvider {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> Result<impl AsRef<[u8]> + use<'p, Self>, ExportError>;
+    ) -> impl AsRef<[u8]> + use<'p, Self>;
     /// Imports a public key in the inverse operation of
     /// [`.export_publickey_bytes()`][Self::export_publickey_bytes()].
     fn import_publickey_bytes(
@@ -147,18 +147,6 @@ impl core::fmt::Display for ImportError {
 }
 
 impl core::error::Error for ImportError {}
-
-/// Error indicating that a key can not be exported because the wrong data format is selected.
-#[derive(Debug)]
-pub struct ExportError;
-
-impl core::fmt::Display for ExportError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("data shape does not match algorithm")
-    }
-}
-
-impl core::error::Error for ExportError {}
 
 /// An algorithm for diffie-hellman style key establishment.
 ///

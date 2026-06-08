@@ -130,9 +130,9 @@ impl embedded_cal::DhProvider for DummySha256 {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> Result<impl AsRef<[u8]> + use<'p>, embedded_cal::ExportError> {
+    ) -> impl AsRef<[u8]> + use<'p> {
         match *public {};
-        Ok(&[])
+        &[]
     }
 
     fn import_publickey_bytes(

@@ -1,5 +1,5 @@
 use super::RustcryptoCal;
-use embedded_cal::{ExportError, ImportError};
+use embedded_cal::ImportError;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 impl embedded_cal::DhProvider for RustcryptoCal {
@@ -88,10 +88,10 @@ impl embedded_cal::DhProvider for RustcryptoCal {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> Result<impl AsRef<[u8]> + use<'p>, ExportError> {
+    ) -> impl AsRef<[u8]> + use<'p> {
         match public {
-            PublicKey::P256(_) => Err(ExportError),
-            PublicKey::X25519(public_key) => Ok(public_key.as_bytes()),
+            PublicKey::P256(public_key) => todo!(),
+            PublicKey::X25519(public_key) => public_key.as_bytes(),
         }
     }
 
