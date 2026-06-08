@@ -280,5 +280,9 @@ mod tests {
         for vec in testvectors::dh::RFC7748_X25519 {
             vec.test_with(&mut cal);
         }
+
+        for vec in testvectors::dh::RFC5903_P256 {
+            vec.test_with(&mut cal);
+        }
     }
 }
