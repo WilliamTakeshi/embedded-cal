@@ -10,6 +10,7 @@ use stm32_metapac::{
     },
 };
 mod aead;
+mod empty_impls;
 mod try_rng;
 
 const WORD_SIZE: usize = 4;

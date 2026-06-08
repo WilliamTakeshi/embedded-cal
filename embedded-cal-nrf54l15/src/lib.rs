@@ -1,6 +1,7 @@
 #![no_std]
 mod aead;
 mod descriptor;
+mod empty_impls;
 mod try_rng;
 
 use descriptor::{DescriptorChain, Input, Output};
