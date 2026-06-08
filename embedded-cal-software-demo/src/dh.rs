@@ -55,7 +55,7 @@ impl<EC: ExtenderConfig> DhProvider for Extender<EC> {
     }
 
     #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_okp<'p>(
+    fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
     ) -> Result<impl AsRef<[u8]> + use<'p, EC>, embedded_cal::ExportError> {
@@ -63,7 +63,7 @@ impl<EC: ExtenderConfig> DhProvider for Extender<EC> {
         Ok(&[])
     }
 
-    fn import_publickey_okp(
+    fn import_publickey_bytes(
         &mut self,
         alg: Self::DhAlgorithm,
         _data: &[u8],

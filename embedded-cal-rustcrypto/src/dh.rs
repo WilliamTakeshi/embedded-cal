@@ -85,7 +85,7 @@ impl embedded_cal::DhProvider for RustcryptoCal {
         &secret.0
     }
 
-    fn export_publickey_okp<'p>(
+    fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
     ) -> Result<impl AsRef<[u8]> + use<'p>, ExportError> {
@@ -95,7 +95,7 @@ impl embedded_cal::DhProvider for RustcryptoCal {
         }
     }
 
-    fn import_publickey_okp(
+    fn import_publickey_bytes(
         &mut self,
         alg: Self::DhAlgorithm,
         data: &[u8],

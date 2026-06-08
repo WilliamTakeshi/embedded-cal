@@ -78,14 +78,16 @@ pub trait DhProvider {
         secret: &[u8],
     ) -> Result<Self::VisibleSecretKey, ImportError>;
 
-    /// Exposes a public key's key data, OKP-style, i.e., as defined by the algorithm in COSE.
-    fn export_publickey_okp<'p>(
+    /// Exposes a public key's key data bytes.
+    ///
+    /// For ECDH keys, this is defined as the compact representation.
+    fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
     ) -> Result<impl AsRef<[u8]> + use<'p, Self>, ExportError>;
     /// Imports a public key in the inverse operation of
-    /// [`.export_publickey_okp()`][Self::export_publickey_okp()].
-    fn import_publickey_okp(
+    /// [`.export_publickey_bytes()`][Self::export_publickey_bytes()].
+    fn import_publickey_bytes(
         &mut self,
         alg: Self::DhAlgorithm,
         data: &[u8],

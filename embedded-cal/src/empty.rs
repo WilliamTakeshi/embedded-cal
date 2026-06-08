@@ -140,14 +140,14 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     }
 
     #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_okp<'p>(
+    fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
     ) -> Result<impl AsRef<[u8]> + use<'p, PLUMBING>, dh::ExportError> {
         match *public {};
         Ok(&[])
     }
-    fn import_publickey_okp(
+    fn import_publickey_bytes(
         &mut self,
         alg: Self::DhAlgorithm,
         _data: &[u8],

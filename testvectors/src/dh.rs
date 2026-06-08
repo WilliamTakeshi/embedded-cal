@@ -32,14 +32,14 @@ impl EccVector {
         let bob_public = cal.public_key(&bob_private);
 
         assert_eq!(
-            cal.export_publickey_okp(&alice_public)
+            cal.export_publickey_bytes(&alice_public)
                 .expect("public key in unexpected format")
                 .as_ref(),
             self.alice_public,
             "Alice's public key not exported as expected"
         );
         assert_eq!(
-            cal.export_publickey_okp(&bob_public)
+            cal.export_publickey_bytes(&bob_public)
                 .expect("public key in unexpected format")
                 .as_ref(),
             self.bob_public,
