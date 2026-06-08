@@ -38,6 +38,10 @@ impl embedded_cal::DhProvider for RustcryptoCal {
     ) -> Result<Self::VisibleSecretKey, ImportError> {
         Ok(VisibleSecretKey(match alg {
             DhAlgorithm::P256 => SecretKey::P256(
+                #[allow(
+                    clippy::unnecessary_fallible_conversions,
+                    reason = "GenericArray has panicking From for slices"
+                )]
                 p256::SecretKey::from_bytes(secret.try_into().map_err(|_| ImportError)?)
                     .map_err(|_| ImportError)?,
             ),
@@ -89,16 +93,15 @@ impl embedded_cal::DhProvider for RustcryptoCal {
     ) -> impl AsRef<[u8]> + use<'p> {
         use p256::elliptic_curve::sec1::ToEncodedPoint;
         match public {
-            PublicKey::P256(public_key) => public_key
+            PublicKey::P256(public_key) => *public_key
                 .to_encoded_point(false)
                 .x()
                 .unwrap()
                 .as_array()
-                .unwrap()
-                .clone(),
-            // FIXME: If we're only supporting X25519, we could do without the .clone() and use the
-            // reference.
-            PublicKey::X25519(public_key) => public_key.as_bytes().clone(),
+                .unwrap(),
+            // FIXME: If we're only supporting X25519, we could do without the dereferencing and
+            // shove less data around.
+            PublicKey::X25519(public_key) => *public_key.as_bytes(),
         }
     }
 
