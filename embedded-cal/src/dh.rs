@@ -83,48 +83,12 @@ pub trait DhProvider {
         &mut self,
         public: &'p Self::PublicKey,
     ) -> Result<impl AsRef<[u8]> + use<'p, Self>, ExportError>;
-    /// Exposes a public key's key data, EC2-style, i.e., as an X and a Y coordinate each in SEC1
-    /// encoding with no leading zeros omitted.
-    // FIXME: If we work with compact points anyway, can't we just treat all as bytes? Does the
-    // p256 crate let us use compact points all the way?
-    fn export_publickey_ec2<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<
-        (
-            impl AsRef<[u8]> + use<'p, Self>,
-            impl AsRef<[u8]> + use<'p, Self>,
-        ),
-        ExportError,
-    >;
-    /// Exposes a public key's key data, EC2-style, i.e., as an X coordinate in SEC1 encoding with
-    /// no leading zeros omitted, and true for positive and false for negaive sign of y.
-    fn export_publickey_ec2_compressed<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<(impl AsRef<[u8]> + use<'p, Self>, bool), ExportError>;
     /// Imports a public key in the inverse operation of
     /// [`.export_publickey_okp()`][Self::export_publickey_okp()].
     fn import_publickey_okp(
         &mut self,
         alg: Self::DhAlgorithm,
         data: &[u8],
-    ) -> Result<Self::PublicKey, ImportError>;
-    /// Imports a public key in the inverse operation of
-    /// [`.export_publickey_ec2()`][Self::export_publickey_ec2()].
-    fn import_publickey_ec2(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        x: &[u8],
-        y: &[u8],
-    ) -> Result<Self::PublicKey, ImportError>;
-    /// Imports a public key in the inverse operation of
-    /// [`.export_publickey_ec2_compressed()`][Self::export_publickey_ec2_compressed()].
-    fn import_publickey_ec2_compressed(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        x: &[u8],
-        y: bool,
     ) -> Result<Self::PublicKey, ImportError>;
 
     /// Derives a shared secret from a public and a private key.

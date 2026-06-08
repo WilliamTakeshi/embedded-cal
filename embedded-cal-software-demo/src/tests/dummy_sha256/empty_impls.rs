@@ -135,47 +135,10 @@ impl embedded_cal::DhProvider for DummySha256 {
         Ok(&[])
     }
 
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_ec2<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<(impl AsRef<[u8]> + use<'p>, impl AsRef<[u8]> + use<'p>), embedded_cal::ExportError>
-    {
-        match *public {};
-        Ok((&[], &[]))
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_ec2_compressed<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<(impl AsRef<[u8]> + use<'p>, bool), embedded_cal::ExportError> {
-        match *public {};
-        Ok((&[], false))
-    }
-
     fn import_publickey_okp(
         &mut self,
         alg: Self::DhAlgorithm,
         _data: &[u8],
-    ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        match alg {}
-    }
-
-    fn import_publickey_ec2(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        _x: &[u8],
-        _y: &[u8],
-    ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        match alg {}
-    }
-
-    fn import_publickey_ec2_compressed(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        _x: &[u8],
-        _y: bool,
     ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
         match alg {}
     }

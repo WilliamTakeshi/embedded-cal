@@ -147,53 +147,10 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         match *public {};
         Ok(&[])
     }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_ec2<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<
-        (
-            impl AsRef<[u8]> + use<'p, PLUMBING>,
-            impl AsRef<[u8]> + use<'p, PLUMBING>,
-        ),
-        dh::ExportError,
-    > {
-        match *public {};
-        Ok((&[], &[]))
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_ec2_compressed<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> Result<(impl AsRef<[u8]> + use<'p, PLUMBING>, bool), dh::ExportError> {
-        match *public {};
-        Ok((&[], false))
-    }
-
     fn import_publickey_okp(
         &mut self,
         alg: Self::DhAlgorithm,
         _data: &[u8],
-    ) -> Result<Self::PublicKey, dh::ImportError> {
-        match alg {}
-    }
-
-    fn import_publickey_ec2(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        _x: &[u8],
-        _y: &[u8],
-    ) -> Result<Self::PublicKey, dh::ImportError> {
-        match alg {}
-    }
-
-    fn import_publickey_ec2_compressed(
-        &mut self,
-        alg: Self::DhAlgorithm,
-        _x: &[u8],
-        _y: bool,
     ) -> Result<Self::PublicKey, dh::ImportError> {
         match alg {}
     }
