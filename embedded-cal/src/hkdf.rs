@@ -4,7 +4,8 @@ use crate::{HmacAlgorithm, HmacProvider};
 pub enum HkdfError {
     /// Requested OKM length exceeds 255 × HashLen bytes (RFC 5869).
     OutputTooLong,
-    /// The underlying HMAC produced an unexpected output length.
+    /// The algorithm's output length exceeds the supported maximum (64 bytes), or the underlying
+    /// HMAC returned a length inconsistent with the algorithm's own reported length.
     InvalidOutputLength,
 }
 
@@ -66,6 +67,7 @@ impl<H: HmacProvider> HkdfProvider for H {
     ) -> Result<Self::Prk, HkdfError> {
         // When salt is absent, RFC 5869 uses HashLen zero bytes as the HMAC key.
         // Buffer covers standard algorithms up to SHA-512 (64 bytes).
+        // Ideally this would be H::Algorithm::MAX_OUTPUT_LEN once const_trait_impl stabilises.
         let zero_salt = [0u8; 64];
         let hash_len = alg.len();
         if hash_len > zero_salt.len() {
@@ -88,7 +90,7 @@ impl<H: HmacProvider> HkdfProvider for H {
             return Err(HkdfError::OutputTooLong);
         }
         let prk_bytes = prk.as_ref();
-        // T buffer covers standard algorithms up to SHA-512 (64 bytes).
+        // Ideally this would be H::Algorithm::MAX_OUTPUT_LEN once const_trait_impl stabilises.
         let mut t = [0u8; 64];
         if hash_len > t.len() {
             return Err(HkdfError::InvalidOutputLength);
