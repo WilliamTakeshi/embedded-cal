@@ -87,6 +87,75 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
+impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+    type DhAlgorithm = NoAlgorithms;
+    type VisibleSecretKey = NoAlgorithms;
+    type SecretKey = NoAlgorithms;
+    type PublicKey = NoAlgorithms;
+    type SharedSecret = NoAlgorithms;
+
+    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Option<Self::VisibleSecretKey>
+    where
+        Self: rand_core::TryRng,
+    {
+        match alg {}
+    }
+
+    fn shared_secret(
+        &mut self,
+        private: &Self::SecretKey,
+        _public: &Self::PublicKey,
+    ) -> Result<Self::SharedSecret, IncompatibleKeys> {
+        match *private {}
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn raw_secret_bytes<'s>(
+        &mut self,
+        secret: &'s Self::SharedSecret,
+    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+        match *secret {};
+        &[]
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+        match *secretkey {};
+        &[]
+    }
+
+    fn import_secretkey_bytes(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, dh::ImportError> {
+        match alg {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_bytes<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> impl AsRef<[u8]> + use<'p, PLUMBING> {
+        match *public {};
+        &[]
+    }
+    fn import_publickey_bytes(
+        &mut self,
+        alg: Self::DhAlgorithm,
+        _data: &[u8],
+    ) -> Result<Self::PublicKey, dh::ImportError> {
+        match alg {}
+    }
+}
+
 impl<const PLUMBING: bool> rand_core::TryCryptoRng for EmptyCal<PLUMBING> {}
 
 impl<const PLUMBING: bool> rand_core::TryRng for EmptyCal<PLUMBING> {
@@ -166,6 +235,12 @@ impl HmacAlgorithm for NoAlgorithms {
 
 impl AsRef<[u8]> for NoAlgorithms {
     fn as_ref(&self) -> &[u8] {
+        match *self {}
+    }
+}
+
+impl DhAlgorithm for NoAlgorithms {
+    fn output_length(&self) -> usize {
         match *self {}
     }
 }

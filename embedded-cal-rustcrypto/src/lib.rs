@@ -1,3 +1,7 @@
+mod dh;
+mod hmac;
+mod rng;
+
 use digest::Digest;
 
 pub struct RustcryptoCal {
@@ -38,6 +42,8 @@ impl Default for RustcryptoCal {
         Self::new()
     }
 }
+
+impl embedded_cal::Cal for RustcryptoCal {}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum HashAlgorithm {
@@ -253,5 +259,30 @@ mod tests {
         let mut cal = RustcryptoCal::new();
 
         testvectors::test_aead_aesccm_16_64_128(&mut cal);
+    }
+
+    #[test]
+    fn test_dh() {
+        use embedded_cal::DhAlgorithm;
+
+        let mut cal = RustcryptoCal::new();
+
+        embedded_cal::test_dh_algorithm_ecdh_p256::<RustcryptoCal>();
+
+        // For lack of loading, we only run a live test
+
+        let p256 = DhAlgorithm::from_cose_ecdh(1).unwrap();
+        let x25519 = DhAlgorithm::from_cose_ecdh(4).unwrap();
+
+        embedded_cal::test_dh_selftest(&mut cal, p256);
+        embedded_cal::test_dh_selftest(&mut cal, x25519);
+
+        for vec in testvectors::dh::RFC7748_X25519 {
+            vec.test_with(&mut cal);
+        }
+
+        for vec in testvectors::dh::RFC5903_P256 {
+            vec.test_with(&mut cal);
+        }
     }
 }
