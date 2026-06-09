@@ -30,5 +30,5 @@ defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 defmt-test = "0.4"
-embedded-cal-software.path = "../embedded-cal-software"
+embedded-cal-software-demo.path = "../embedded-cal-software-demo"
 testvectors.path = "../testvectors"

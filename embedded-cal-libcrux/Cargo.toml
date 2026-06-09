@@ -1,5 +1,5 @@
 [package]
-name = "embedded-cal-software"
+name = "embedded-cal-libcrux"
 edition.workspace = true
 license.workspace = true
 readme.workspace = true
@@ -9,8 +9,8 @@ categories.workspace = true
 version.workspace = true
 
 [dependencies]
-embedded-cal = { version = "0.1.0", path = "../embedded-cal" }
-rand_core.workspace = true
+embedded-cal.path = "../embedded-cal"
+libcrux-sha2 = "0.0.7"
 
 [dev-dependencies]
 testvectors.path = "../testvectors"

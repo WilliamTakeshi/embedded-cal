@@ -5,14 +5,14 @@ use defmt_rtt as _;
 use panic_probe as _;
 
 struct ImplementSha256Short;
-impl embedded_cal_software::ExtenderConfig for ImplementSha256Short {
+impl embedded_cal_software_demo::ExtenderConfig for ImplementSha256Short {
     const IMPLEMENT_SHA2SHORT: bool = true;
     type Base = embedded_cal_stm32wba55::Stm32wba55Cal;
 }
 
 struct TestState {
     /// Software-extended CAL used for the SHA-256 hash tests.
-    cal: embedded_cal_software::Extender<ImplementSha256Short>,
+    cal: embedded_cal_software_demo::Extender<ImplementSha256Short>,
     /// Raw STM32WBA55 CAL used to exercise the hardware HMAC accelerator directly.
     raw: embedded_cal_stm32wba55::Stm32wba55Cal,
 }
@@ -37,7 +37,7 @@ mod tests {
             stm32_metapac::RNG,
         );
 
-        let cal = embedded_cal_software::Extender::<ImplementSha256Short>::new(base);
+        let cal = embedded_cal_software_demo::Extender::<ImplementSha256Short>::new(base);
         super::TestState { cal, raw }
     }
 
