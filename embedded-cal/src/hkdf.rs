@@ -4,9 +4,6 @@ use crate::{HmacAlgorithm, HmacProvider};
 pub enum HkdfError {
     /// Requested OKM length exceeds 255 × HashLen bytes (RFC 5869).
     OutputTooLong,
-    /// The algorithm's output length exceeds the supported maximum (64 bytes), or the underlying
-    /// HMAC returned a length inconsistent with the algorithm's own reported length.
-    InvalidOutputLength,
 }
 
 /// An interface for using HKDF (defined in
@@ -67,11 +64,13 @@ impl<H: HmacProvider> HkdfProvider for H {
         // When salt is absent, RFC 5869 uses HashLen zero bytes as the HMAC key.
         // Buffer covers standard algorithms up to SHA-512 (64 bytes).
         // Ideally this would be H::Algorithm::MAX_OUTPUT_LEN once const_trait_impl stabilises.
-        let zero_salt = [0u8; 64];
+        let mut zero_salt = <<H as HmacProvider>::Algorithm as HmacAlgorithm>::MaxLenBuf::default();
+        let zero_salt = zero_salt.as_mut();
         let hash_len = alg.len();
-        if hash_len > zero_salt.len() {
-            return Err(HkdfError::InvalidOutputLength);
-        }
+        debug_assert!(
+            hash_len <= zero_salt.len(),
+            "algorithm length is longer than type's announced maximum HMAC length"
+        );
         let salt_bytes = salt.unwrap_or(&zero_salt[..hash_len]);
         // PRK = HMAC-Hash(salt, IKM)
         Ok(self.hmac_with_keydata(alg, salt_bytes, ikm))
@@ -88,11 +87,12 @@ impl<H: HmacProvider> HkdfProvider for H {
         if okm.len() > 255 * hash_len {
             return Err(HkdfError::OutputTooLong);
         }
-        // Ideally this would be H::Algorithm::MAX_OUTPUT_LEN once const_trait_impl stabilises.
-        let mut t = [0u8; 64];
-        if hash_len > t.len() {
-            return Err(HkdfError::InvalidOutputLength);
-        }
+        let mut t = <<H as HmacProvider>::Algorithm as HmacAlgorithm>::MaxLenBuf::default();
+        let t = t.as_mut();
+        debug_assert!(
+            hash_len <= t.len(),
+            "algorithm length is longer than type's announced maximum HMAC length"
+        );
         let mut t_len = 0usize;
         let mut pos = 0usize;
 
@@ -108,9 +108,11 @@ impl<H: HmacProvider> HkdfProvider for H {
             HmacProvider::update(self, &mut state, &[counter]);
             let result = HmacProvider::finalize(self, state);
             let result_bytes = result.as_ref();
-            if result_bytes.len() != hash_len {
-                return Err(HkdfError::InvalidOutputLength);
-            }
+            debug_assert_eq!(
+                result_bytes.len(),
+                hash_len,
+                "algorithm did not produce its announced fixed length as output"
+            );
             t[..hash_len].copy_from_slice(result_bytes);
             t_len = hash_len;
 
