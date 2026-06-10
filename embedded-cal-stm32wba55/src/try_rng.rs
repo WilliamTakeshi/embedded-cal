@@ -1,29 +1,9 @@
 use crate::Stm32wba55Cal;
 const MAX_SEED_RETRIES: u32 = 3;
 
-/// Error returned by [`RngProvider::try_fill_bytes`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RngError {
-    /// The hardware noise source failed its internal health test too many times.
-    ///
-    /// This indicates the entropy source may be untrustworthy (degraded oscillator,
-    /// power instability, or a silicon fault).
-    HardwareFailure,
-}
-
-impl core::fmt::Display for RngError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            RngError::HardwareFailure => write!(f, "hardware noise source failed health test"),
-        }
-    }
-}
-
-impl core::error::Error for RngError {}
-
 impl rand_core::TryCryptoRng for Stm32wba55Cal {}
 impl rand_core::TryRng for Stm32wba55Cal {
-    type Error = RngError;
+    type Error = core::convert::Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         let mut bytes = [0u8; 4];
@@ -53,14 +33,15 @@ impl rand_core::TryRng for Stm32wba55Cal {
                 // degraded (bad oscillator, power instability, temperature extreme,
                 // or a silicon fault). Re-initializing in that case just loops back
                 // to the same failure, so we bound retries: after MAX_SEED_RETRIES
-                // consecutive seed errors we give up and return Err(()) rather than
-                // spinning forever or handing out potentially non-random bytes.
+                // consecutive seed errors we assume the hardware is faulty or has
+                // been tampered with, rather than spinning forever or handing out
+                // potentially non-random bytes.
                 seed_errors += 1;
                 if seed_errors > MAX_SEED_RETRIES {
-                    return Err(RngError::HardwareFailure);
+                    panic!("RNG hardware failure");
                 }
                 self.rng.sr().modify(|w| w.set_seis(false));
-                self.init_rng()?;
+                self.init_rng();
                 continue;
             }
 

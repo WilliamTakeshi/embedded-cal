@@ -2,29 +2,9 @@ use crate::Nrf54l15Cal;
 use nrf_pac::cracencore::vals::{ControlSoftrst, State};
 const MAX_TRNG_RESTARTS: u32 = 3;
 
-/// Error returned by [`RngProvider::try_fill_bytes`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RngError {
-    /// The hardware noise source failed its internal health test too many times.
-    ///
-    /// This indicates the entropy source may be untrustworthy (degraded oscillator,
-    /// power instability, or a silicon fault).
-    HardwareFailure,
-}
-
-impl core::fmt::Display for RngError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            RngError::HardwareFailure => write!(f, "hardware noise source failed health test"),
-        }
-    }
-}
-
-impl core::error::Error for RngError {}
-
 impl rand_core::TryCryptoRng for Nrf54l15Cal {}
 impl rand_core::TryRng for Nrf54l15Cal {
-    type Error = RngError;
+    type Error = core::convert::Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         let mut bytes = [0u8; 4];
@@ -54,13 +34,14 @@ impl rand_core::TryRng for Nrf54l15Cal {
             //
             // Unlike transient startup/fill states (RESET, STARTUP, FILLFIFO),
             // ERROR indicates the noise source itself may be untrustworthy, so
-            // we bound restarts: after MAX_TRNG_RESTARTS we return Err(HardwareFailure)
-            // rather than looping forever or handing out potentially non-random bytes.
+            // we bound restarts: after MAX_TRNG_RESTARTS we assume the hardware
+            // is faulty or has been tampered with, rather than looping forever
+            // or handing out potentially non-random bytes.
             let fsm = self.cracen_core.rngcontrol().status().read().state();
             if fsm == State::ERROR {
                 restarts += 1;
                 if restarts > MAX_TRNG_RESTARTS {
-                    return Err(RngError::HardwareFailure);
+                    panic!("RNG hardware failure");
                 }
 
                 // Pulse softrst to flush the conditioner and FIFO
