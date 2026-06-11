@@ -1,4 +1,4 @@
-use embedded_cal::HashProvider;
+use embedded_cal::{Cal, HashProvider};
 
 use super::*;
 
@@ -6,7 +6,7 @@ use super::*;
 pub struct Sha256State(libcrux_sha2::Sha256);
 
 pub enum HashState<EC: ExtenderConfig> {
-    Direct(<EC::Base as HashProvider>::HashState),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::State),
     Sha256(Sha256State),
 }
 
@@ -23,28 +23,26 @@ impl<EC: ExtenderConfig> Clone for HashState<EC> {
 
 impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     type Algorithm = HashAlgorithm<EC>;
-    type HashState = HashState<EC>;
-    type HashResult = HashResult<EC>;
+    type State = HashState<EC>;
+    type Output = HashResult<EC>;
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
         match algorithm {
             HashAlgorithm::Sha256 => HashState::Sha256(Sha256State(libcrux_sha2::Sha256::new())),
-            HashAlgorithm::Direct(alg) => HashState::Direct(HashProvider::init(&mut self.0, alg)),
+            HashAlgorithm::Direct(alg) => HashState::Direct(self.0.hash().init(alg)),
         }
     }
 
-    fn update(&mut self, instance: &mut Self::HashState, data: &[u8]) {
+    fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
         match instance {
-            HashState::Direct(i) => HashProvider::update(&mut self.0, i, data),
+            HashState::Direct(i) => self.0.hash().update(i, data),
             HashState::Sha256(s) => s.0.update(data),
         }
     }
 
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
         match instance {
-            HashState::Direct(underlying) => {
-                HashResult::Direct(HashProvider::finalize(&mut self.0, underlying))
-            }
+            HashState::Direct(underlying) => HashResult::Direct(self.0.hash().finalize(underlying)),
             HashState::Sha256(s) => {
                 let mut output = [0u8; 32];
                 s.0.finish(&mut output);
@@ -56,7 +54,7 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
 
 pub enum HashAlgorithm<EC: ExtenderConfig> {
     Sha256,
-    Direct(<EC::Base as HashProvider>::Algorithm),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::Algorithm),
 }
 
 // Seems the Derive wouldn't take because it only looks at whether all arguments are Clone, not at
@@ -109,8 +107,10 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 
         match number {
             -16 => Some(HashAlgorithm::Sha256),
-            _ => <EC::Base as HashProvider>::Algorithm::from_cose_number(number)
-                .map(HashAlgorithm::Direct),
+            _ => <<EC::Base as Cal>::HashProvider as HashProvider>::Algorithm::from_cose_number(
+                number,
+            )
+            .map(HashAlgorithm::Direct),
         }
     }
 
@@ -133,7 +133,7 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 
 pub enum HashResult<EC: ExtenderConfig> {
     Sha256([u8; 32]),
-    Direct(<EC::Base as HashProvider>::HashResult),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::Output),
 }
 
 impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {

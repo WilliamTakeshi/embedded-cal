@@ -3,13 +3,13 @@ use embedded_cal::ImportError;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 impl embedded_cal::DhProvider for RustcryptoCal {
-    type DhAlgorithm = DhAlgorithm;
+    type Algorithm = DhAlgorithm;
     type VisibleSecretKey = VisibleSecretKey;
     type SecretKey = SecretKey;
     type PublicKey = PublicKey;
     type SharedSecret = SharedSecret;
 
-    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Self::VisibleSecretKey {
+    fn generate_visible(&mut self, alg: Self::Algorithm) -> Self::VisibleSecretKey {
         // We're not wrapping anything, so no point in deferring to the self RNG.
         VisibleSecretKey(match alg {
             DhAlgorithm::P256 => SecretKey::P256(p256::SecretKey::random(&mut OldRng(self))),
@@ -33,7 +33,7 @@ impl embedded_cal::DhProvider for RustcryptoCal {
 
     fn import_secretkey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         secret: &[u8],
     ) -> Result<Self::VisibleSecretKey, ImportError> {
         Ok(VisibleSecretKey(match alg {
@@ -107,7 +107,7 @@ impl embedded_cal::DhProvider for RustcryptoCal {
 
     fn import_publickey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         data: &[u8],
     ) -> Result<Self::PublicKey, ImportError> {
         use p256::elliptic_curve::point::DecompressPoint;

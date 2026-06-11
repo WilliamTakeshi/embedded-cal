@@ -1,10 +1,10 @@
 #![no_std]
 mod aead;
 mod descriptor;
-mod empty_impls;
 mod try_rng;
 
 use descriptor::{DescriptorChain, Input, Output};
+use embedded_cal::empty::EmptyCal;
 use nrf_pac::{cracen, cracencore};
 
 // CCM encrypt needs 4 input descriptors (config, key, header+aad, plaintext) and
@@ -16,9 +16,33 @@ pub struct Nrf54l15Cal {
     // it's possible to have a more granular ownership
     cracen: cracen::Cracen,
     cracen_core: cracencore::Cracencore,
+
+    // Null-provider for everything we do *not* implement
+    empty: EmptyCal<false>,
 }
 
-impl embedded_cal::Cal for Nrf54l15Cal {}
+impl embedded_cal::Cal for Nrf54l15Cal {
+    type DhProvider = EmptyCal<false>;
+    type AeadProvider = Self;
+    type HashProvider = EmptyCal<false>;
+    type HmacProvider = EmptyCal<false>;
+
+    fn dh(&mut self) -> &mut Self::DhProvider {
+        &mut self.empty
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        &mut self.empty
+    }
+
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        &mut self.empty
+    }
+}
 
 impl Nrf54l15Cal {
     pub fn new(cracen: cracen::Cracen, cracen_core: cracencore::Cracencore) -> Self {
@@ -42,6 +66,7 @@ impl Nrf54l15Cal {
         Self {
             cracen,
             cracen_core,
+            empty: EmptyCal,
         }
     }
 }
@@ -80,47 +105,6 @@ impl AsRef<[u8]> for HashResult {
         match self {
             HashResult::Sha256(r) => &r[..],
         }
-    }
-}
-
-impl embedded_cal::HashProvider for Nrf54l15Cal {
-    type Algorithm = embedded_cal::empty::NoAlgorithms;
-    type HashState = embedded_cal::empty::NoAlgorithms;
-    type HashResult = embedded_cal::empty::NoAlgorithms;
-
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
-        match algorithm {}
-    }
-
-    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
-        match *instance {}
-    }
-
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
-        match instance {}
-    }
-}
-
-impl embedded_cal::HmacProvider for Nrf54l15Cal {
-    type Algorithm = embedded_cal::empty::NoAlgorithms;
-    type Key = embedded_cal::empty::NoAlgorithms;
-    type HmacState = embedded_cal::empty::NoAlgorithms;
-    type HmacResult = embedded_cal::empty::NoAlgorithms;
-
-    fn load_from_keydata(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::Key {
-        match algorithm {}
-    }
-
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
-        key
-    }
-
-    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
-        match *state {}
-    }
-
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
-        match state {}
     }
 }
 

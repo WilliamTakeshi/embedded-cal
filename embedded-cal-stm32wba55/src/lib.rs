@@ -1,5 +1,6 @@
 #![no_std]
 
+use embedded_cal::empty::EmptyCal;
 use embedded_cal::plumbing::hash::SHA2SHORT_BLOCK_SIZE;
 use stm32_metapac::{
     aes, hash,
@@ -10,7 +11,6 @@ use stm32_metapac::{
     },
 };
 mod aead;
-mod empty_impls;
 mod try_rng;
 
 const WORD_SIZE: usize = 4;
@@ -24,9 +24,31 @@ pub struct Stm32wba55Cal {
     rcc: rcc::Rcc,
     rng: rng::Rng,
     aes: aes::Aes,
+
+    // Null-provider for everything we do *not* implement
+    empty: EmptyCal<false>,
 }
 
-impl embedded_cal::Cal for Stm32wba55Cal {}
+impl embedded_cal::Cal for Stm32wba55Cal {
+    type DhProvider = EmptyCal<false>;
+    type AeadProvider = Self;
+    type HashProvider = EmptyCal<false>;
+    type HmacProvider = Self;
+
+    fn dh(&mut self) -> &mut Self::DhProvider {
+        &mut self.empty
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        &mut self.empty
+    }
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self
+    }
+}
 
 impl Stm32wba55Cal {
     pub fn new(hash: hash::Hash, rcc: rcc::Rcc, rng: rng::Rng, aes: aes::Aes) -> Self {
@@ -45,6 +67,7 @@ impl Stm32wba55Cal {
             rcc,
             rng,
             aes,
+            empty: EmptyCal,
         };
         cal.init_rng();
         cal
@@ -143,24 +166,6 @@ struct Context {
     imr: hash::regs::Imr,
 }
 
-impl embedded_cal::HashProvider for Stm32wba55Cal {
-    type Algorithm = embedded_cal::empty::NoAlgorithms;
-    type HashState = embedded_cal::empty::NoAlgorithms;
-    type HashResult = embedded_cal::empty::NoAlgorithms;
-
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
-        match algorithm {}
-    }
-
-    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
-        match *instance {}
-    }
-
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
-        match instance {}
-    }
-}
-
 /// HMAC algorithm identifier for the STM32WBA55 hardware accelerator.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HmacAlgorithm {
@@ -212,8 +217,8 @@ impl AsRef<[u8]> for HmacResult {
 impl embedded_cal::HmacProvider for Stm32wba55Cal {
     type Algorithm = HmacAlgorithm;
     type Key = HmacState;
-    type HmacState = HmacState;
-    type HmacResult = HmacResult;
+    type State = HmacState;
+    type Output = HmacResult;
 
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
         match algorithm {
@@ -261,11 +266,11 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
         }
     }
 
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+    fn init(&mut self, key: Self::Key) -> Self::State {
         key
     }
 
-    fn update(&mut self, state: &mut Self::HmacState, data: &[u8]) {
+    fn update(&mut self, state: &mut Self::State, data: &[u8]) {
         let mut remaining = data;
         let mut wrote_blocks = false;
 
@@ -301,7 +306,7 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
         }
     }
 
-    fn finalize(&mut self, mut state: Self::HmacState) -> Self::HmacResult {
+    fn finalize(&mut self, mut state: Self::State) -> Self::Output {
         // Restore hardware to the last saved context.
         if let Some(ctx) = state.context.take() {
             self.restore_context_hmac(&ctx);

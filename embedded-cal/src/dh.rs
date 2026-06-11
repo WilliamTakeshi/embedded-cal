@@ -22,7 +22,7 @@
 /// export and import in EC2-style format are expected, both with and without coordinate
 /// compression.
 pub trait DhProvider {
-    type DhAlgorithm: DhAlgorithm;
+    type Algorithm: DhAlgorithm;
     /// A secret key that is intended to be exported.
     ///
     /// It is recommended (but not required) that this is not just [`SecretKey`][Self::SecretKey]
@@ -43,10 +43,10 @@ pub trait DhProvider {
 
     /// Generates a secret key that is intended to be exported / shared (e.g. to be persisted
     /// across program executions).
-    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Self::VisibleSecretKey;
+    fn generate_visible(&mut self, alg: Self::Algorithm) -> Self::VisibleSecretKey;
 
     /// Generates a secret key.
-    fn generate(&mut self, alg: Self::DhAlgorithm) -> Self::SecretKey {
+    fn generate(&mut self, alg: Self::Algorithm) -> Self::SecretKey {
         self.generate_visible(alg).into()
     }
 
@@ -67,7 +67,7 @@ pub trait DhProvider {
     // FIXME: Should this go directly to SecretKey without being re-exportable?
     fn import_secretkey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         secret: &[u8],
     ) -> Result<Self::VisibleSecretKey, ImportError>;
 
@@ -82,7 +82,7 @@ pub trait DhProvider {
     /// [`.export_publickey_bytes()`][Self::export_publickey_bytes()].
     fn import_publickey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         data: &[u8],
     ) -> Result<Self::PublicKey, ImportError>;
 
@@ -174,13 +174,18 @@ pub trait DhAlgorithm: Sized + PartialEq + Eq + core::fmt::Debug + Clone {
 }
 
 pub fn test_dh_algorithm_ecdh_p256<DP: DhProvider>() {
-    let cose_ecdh_1 = DP::DhAlgorithm::from_cose_ecdh(1i8).expect(
+    let cose_ecdh_1 = DP::Algorithm::from_cose_ecdh(1i8).expect(
         "test for type claiming ECDH on P-256 compatibility did not recognize COSE curve 1",
     );
     assert_eq!(cose_ecdh_1.output_length(), 32)
 }
 
-pub fn test_dh_selftest<C: crate::Cal + rand_core::CryptoRng>(cal: &mut C, alg: C::DhAlgorithm) {
+pub fn test_dh_selftest<C: crate::Cal + rand_core::CryptoRng>(
+    cal: &mut C,
+    alg: <C::DhProvider as DhProvider>::Algorithm,
+) {
+    let cal = cal.dh();
+
     let my_secret = cal.generate(alg.clone());
     let peer_secret = cal.generate(alg);
     let my_public = cal.public_key(&my_secret);

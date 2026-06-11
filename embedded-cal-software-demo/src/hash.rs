@@ -1,5 +1,5 @@
 use embedded_cal::{
-    HashProvider,
+    Cal, HashProvider,
     plumbing::hash::{SHA2SHORT_BLOCK_SIZE, Sha2Short, Sha2ShortVariant},
 };
 
@@ -10,24 +10,24 @@ const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     type Algorithm = HashAlgorithm<EC>;
 
-    type HashState = HashState<EC>;
+    type State = HashState<EC>;
 
-    type HashResult = HashResult<EC>;
+    type Output = HashResult<EC>;
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
         match algorithm {
             HashAlgorithm::Sha256 => HashState::Sha256 {
                 written: 0,
                 buffer: [0; _],
                 instance: Sha2Short::init(&mut self.0, Sha2ShortVariant::Sha256),
             },
-            HashAlgorithm::Direct(alg) => HashState::Direct(HashProvider::init(&mut self.0, alg)),
+            HashAlgorithm::Direct(alg) => HashState::Direct(self.0.hash().init(alg)),
         }
     }
 
-    fn update(&mut self, instance: &mut Self::HashState, mut data: &[u8]) {
+    fn update(&mut self, instance: &mut Self::State, mut data: &[u8]) {
         match instance {
-            HashState::Direct(i) => HashProvider::update(&mut self.0, i, data),
+            HashState::Direct(i) => self.0.hash().update(i, data),
             HashState::Sha256 {
                 written,
                 buffer,
@@ -74,11 +74,9 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
         }
     }
 
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
         match instance {
-            HashState::Direct(underlying) => {
-                HashResult::Direct(HashProvider::finalize(&mut self.0, underlying))
-            }
+            HashState::Direct(underlying) => HashResult::Direct(self.0.hash().finalize(underlying)),
             HashState::Sha256 {
                 written,
                 buffer,
@@ -133,7 +131,7 @@ pub enum HashAlgorithm<EC: ExtenderConfig> {
     // FIXME: Ideally we'd employ some witness type of <EC::Base as Sha2Short>::SUPPORTED
     // to render this uninhabited when unused.
     Sha256,
-    Direct(<EC::Base as HashProvider>::Algorithm),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::Algorithm),
 }
 
 // Seems the Derive wouldn't take because it only looks at whether all arguments are Clone, not at
@@ -186,8 +184,10 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 
         match number {
             -16 => Some(HashAlgorithm::Sha256),
-            _ => <EC::Base as HashProvider>::Algorithm::from_cose_number(number)
-                .map(HashAlgorithm::Direct),
+            _ => <<EC::Base as Cal>::HashProvider as HashProvider>::Algorithm::from_cose_number(
+                number,
+            )
+            .map(HashAlgorithm::Direct),
         }
     }
 
@@ -209,7 +209,7 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 }
 
 pub enum HashState<EC: ExtenderConfig> {
-    Direct(<EC::Base as HashProvider>::HashState),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::State),
     Sha256 {
         written: usize,
         // FIXME: would rely on const generic arguments, have to pick configurable maximum instead and
@@ -245,7 +245,7 @@ impl<EC: ExtenderConfig> Clone for HashState<EC> {
 
 pub enum HashResult<EC: ExtenderConfig> {
     Sha256([u8; 32]),
-    Direct(<EC::Base as HashProvider>::HashResult),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::Output),
 }
 
 impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_hash_algorithm_sha256_on_dummy() {
-        let mut cal = Extender::<ImplementSha256Short>(dummy_sha256::DummySha256);
+        let mut cal = Extender::<ImplementSha256Short>(dummy_sha256::DummySha256::new());
 
         testvectors::test_hash_algorithm_sha256(&mut cal);
     }

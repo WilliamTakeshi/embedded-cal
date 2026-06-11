@@ -16,9 +16,11 @@ impl EccVector {
     /// Panics if either the algorithm is not supported, or either direction of running DH does not
     /// result in the expected shared secret.
     pub fn test_with<C: embedded_cal::Cal>(&self, cal: &mut C) {
-        use embedded_cal::DhAlgorithm;
+        use embedded_cal::{DhAlgorithm, DhProvider};
 
-        let alg = C::DhAlgorithm::from_cose_ecdh(self.ecdh_curve)
+        let cal = cal.dh();
+
+        let alg = <C::DhProvider as DhProvider>::Algorithm::from_cose_ecdh(self.ecdh_curve)
             .expect("algorithm not supported by CAL");
         let alice_private = cal
             .import_secretkey_bytes(alg.clone(), self.alice_private)

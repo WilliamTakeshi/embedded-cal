@@ -5,22 +5,22 @@ use embedded_cal::*;
 impl HmacProvider for RustcryptoCal {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
-    type HmacState = NoAlgorithms;
-    type HmacResult = NoAlgorithms;
+    type State = NoAlgorithms;
+    type Output = NoAlgorithms;
 
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::Key {
         match algorithm {}
     }
 
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+    fn init(&mut self, key: Self::Key) -> Self::State {
         match key {}
     }
 
-    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
+    fn update(&mut self, state: &mut Self::State, _data: &[u8]) {
         match *state {}
     }
 
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+    fn finalize(&mut self, state: Self::State) -> Self::Output {
         match state {}
     }
 }

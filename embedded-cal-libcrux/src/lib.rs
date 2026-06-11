@@ -5,7 +5,6 @@ use embedded_cal::{Cal, plumbing::Plumbing};
 use libcrux_sha2::Digest;
 
 mod aead;
-mod empty_impls;
 mod hash;
 
 pub trait ExtenderConfig {
@@ -24,4 +23,23 @@ impl<EC: ExtenderConfig> Extender<EC> {
     }
 }
 
-impl<EC: ExtenderConfig> Cal for Extender<EC> {}
+impl<EC: ExtenderConfig> Cal for Extender<EC> {
+    type DhProvider = <EC::Base as Cal>::DhProvider;
+    type AeadProvider = Self;
+    type HashProvider = Self;
+    // FIXME: This should just be provided as well.
+    type HmacProvider = <EC::Base as Cal>::HmacProvider;
+
+    fn dh(&mut self) -> &mut Self::DhProvider {
+        self.0.dh()
+    }
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        self
+    }
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self.0.hmac()
+    }
+}
