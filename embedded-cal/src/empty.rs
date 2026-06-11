@@ -39,18 +39,18 @@ impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
 
 impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
     type Algorithm = NoAlgorithms;
-    type HashState = NoAlgorithms;
-    type HashResult = NoAlgorithms;
+    type State = NoAlgorithms;
+    type Output = NoAlgorithms;
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
         match algorithm {}
     }
 
-    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
+    fn update(&mut self, instance: &mut Self::State, _data: &[u8]) {
         match *instance {}
     }
 
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
         match instance {}
     }
 }
@@ -58,22 +58,22 @@ impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
 impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
-    type HmacState = NoAlgorithms;
-    type HmacResult = NoAlgorithms;
+    type State = NoAlgorithms;
+    type Output = NoAlgorithms;
 
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, _key: &[u8]) -> Self::Key {
         match algorithm {}
     }
 
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+    fn init(&mut self, key: Self::Key) -> Self::State {
         match key {}
     }
 
-    fn update(&mut self, state: &mut Self::HmacState, _data: &[u8]) {
+    fn update(&mut self, state: &mut Self::State, _data: &[u8]) {
         match *state {}
     }
 
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+    fn finalize(&mut self, state: Self::State) -> Self::Output {
         match state {}
     }
 }
@@ -110,13 +110,13 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
 }
 
 impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
-    type DhAlgorithm = NoAlgorithms;
+    type Algorithm = NoAlgorithms;
     type VisibleSecretKey = NoAlgorithms;
     type SecretKey = NoAlgorithms;
     type PublicKey = NoAlgorithms;
     type SharedSecret = NoAlgorithms;
 
-    fn generate_visible(&mut self, alg: Self::DhAlgorithm) -> Self::VisibleSecretKey {
+    fn generate_visible(&mut self, alg: Self::Algorithm) -> Self::VisibleSecretKey {
         match alg {}
     }
 
@@ -152,7 +152,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
 
     fn import_secretkey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         _secret: &[u8],
     ) -> Result<Self::VisibleSecretKey, dh::ImportError> {
         match alg {}
@@ -168,7 +168,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     }
     fn import_publickey_bytes(
         &mut self,
-        alg: Self::DhAlgorithm,
+        alg: Self::Algorithm,
         _data: &[u8],
     ) -> Result<Self::PublicKey, dh::ImportError> {
         match alg {}

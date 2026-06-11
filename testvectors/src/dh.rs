@@ -20,7 +20,7 @@ impl EccVector {
 
         let cal = cal.dh();
 
-        let alg = <C::DhProvider as DhProvider>::DhAlgorithm::from_cose_ecdh(self.ecdh_curve)
+        let alg = <C::DhProvider as DhProvider>::Algorithm::from_cose_ecdh(self.ecdh_curve)
             .expect("algorithm not supported by CAL");
         let alice_private = cal
             .import_secretkey_bytes(alg.clone(), self.alice_private)

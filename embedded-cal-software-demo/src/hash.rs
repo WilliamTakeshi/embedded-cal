@@ -10,11 +10,11 @@ const HASH_WRAPPER_MAX_BLOCKSIZE: usize = 68;
 impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
     type Algorithm = HashAlgorithm<EC>;
 
-    type HashState = HashState<EC>;
+    type State = HashState<EC>;
 
-    type HashResult = HashResult<EC>;
+    type Output = HashResult<EC>;
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
         match algorithm {
             HashAlgorithm::Sha256 => HashState::Sha256 {
                 written: 0,
@@ -25,7 +25,7 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
         }
     }
 
-    fn update(&mut self, instance: &mut Self::HashState, mut data: &[u8]) {
+    fn update(&mut self, instance: &mut Self::State, mut data: &[u8]) {
         match instance {
             HashState::Direct(i) => self.0.hash().update(i, data),
             HashState::Sha256 {
@@ -74,7 +74,7 @@ impl<EC: ExtenderConfig> HashProvider for Extender<EC> {
         }
     }
 
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
         match instance {
             HashState::Direct(underlying) => HashResult::Direct(self.0.hash().finalize(underlying)),
             HashState::Sha256 {
@@ -209,7 +209,7 @@ impl<EC: ExtenderConfig> embedded_cal::HashAlgorithm for HashAlgorithm<EC> {
 }
 
 pub enum HashState<EC: ExtenderConfig> {
-    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::HashState),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::State),
     Sha256 {
         written: usize,
         // FIXME: would rely on const generic arguments, have to pick configurable maximum instead and
@@ -245,7 +245,7 @@ impl<EC: ExtenderConfig> Clone for HashState<EC> {
 
 pub enum HashResult<EC: ExtenderConfig> {
     Sha256([u8; 32]),
-    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::HashResult),
+    Direct(<<EC::Base as Cal>::HashProvider as HashProvider>::Output),
 }
 
 impl<EC: ExtenderConfig> AsRef<[u8]> for HashResult<EC> {

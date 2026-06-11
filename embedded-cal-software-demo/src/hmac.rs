@@ -35,7 +35,7 @@ pub enum HmacKey<EC: ExtenderConfig> {
     // HmacState -- but that would incur a Clone requirement (and a Clone guarantee on HmacState)
     // that we can't keep up when we forward to the underlying implementation.
     HmacSha256 {
-        inner: <Extender<EC> as HashProvider>::HashState,
+        inner: <Extender<EC> as HashProvider>::State,
         outer_key: [u8; SHA2SHORT_BLOCK_SIZE],
     },
 }
@@ -56,7 +56,7 @@ impl<EC: ExtenderConfig> Clone for HmacKey<EC> {
 pub enum HmacState<EC: ExtenderConfig> {
     HmacSha256 {
         /// Inner hash state accumulating `H((K XOR ipad) || message)`.
-        inner: <Extender<EC> as HashProvider>::HashState,
+        inner: <Extender<EC> as HashProvider>::State,
         /// Key material XORed with opad, ready for the outer hash in `finalize`.
         outer_key: [u8; SHA2SHORT_BLOCK_SIZE],
     },
@@ -77,8 +77,8 @@ impl AsRef<[u8]> for HmacResult {
 impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
     type Algorithm = HmacAlgorithm;
     type Key = HmacKey<EC>;
-    type HmacState = HmacState<EC>;
-    type HmacResult = HmacResult;
+    type State = HmacState<EC>;
+    type Output = HmacResult;
 
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
         match algorithm {
@@ -116,13 +116,13 @@ impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
         }
     }
 
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+    fn init(&mut self, key: Self::Key) -> Self::State {
         match key {
             HmacKey::HmacSha256 { inner, outer_key } => HmacState::HmacSha256 { inner, outer_key },
         }
     }
 
-    fn update(&mut self, state: &mut Self::HmacState, data: &[u8]) {
+    fn update(&mut self, state: &mut Self::State, data: &[u8]) {
         match state {
             HmacState::HmacSha256 { inner, .. } => {
                 HashProvider::update(self, inner, data);
@@ -130,7 +130,7 @@ impl<EC: ExtenderConfig> HmacProvider for Extender<EC> {
         }
     }
 
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult {
+    fn finalize(&mut self, state: Self::State) -> Self::Output {
         match state {
             HmacState::HmacSha256 { inner, outer_key } => {
                 // Finish inner hash, then compute outer: H(outer_key || inner_result)

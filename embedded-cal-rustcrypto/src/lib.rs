@@ -116,24 +116,24 @@ impl AsRef<[u8]> for HashResult {
 
 impl embedded_cal::HashProvider for RustcryptoCal {
     type Algorithm = HashAlgorithm;
-    type HashState = HashState;
-    type HashResult = HashResult;
+    type State = HashState;
+    type Output = HashResult;
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
         match algorithm {
             // Same for any, really
             HashAlgorithm::Sha256 => HashState::Sha256(Default::default()),
         }
     }
 
-    fn update(&mut self, instance: &mut Self::HashState, data: &[u8]) {
+    fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
         match instance {
             // Same for any, really
             HashState::Sha256(s) => s.update(data),
         }
     }
 
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
         match instance {
             // Same for any, really
             HashState::Sha256(s) => HashResult::Sha256(s.finalize().into()),

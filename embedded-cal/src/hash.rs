@@ -11,7 +11,7 @@ pub trait HashProvider {
     /// way. (Also, if such a hardware actually exists, please open an issue about it).
     // FIXME: Link to stable FAQ position once that is more website/documentation shape and not
     // just a GitHub Markdown document.
-    type HashState: Sized + Clone;
+    type State: Sized + Clone;
     /// Output of a hashing operation.
     ///
     /// This needs to be sufficiently large to contain any selected hash's output. When collecting
@@ -21,16 +21,16 @@ pub trait HashProvider {
     /// on output sizes).
     // FIXME: Link to stable FAQ position once that is more website/documentation shape and not
     // just a GitHub Markdown document.
-    type HashResult: AsRef<[u8]>;
+    type Output: AsRef<[u8]>;
 
     // Spitballing here to convey the idea and check whether ownership and lifetimes can work this
     // way. FIXME: Pick terminology from existing crates.
 
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState;
-    fn update(&mut self, instance: &mut Self::HashState, data: &[u8]);
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State;
+    fn update(&mut self, instance: &mut Self::State, data: &[u8]);
     // FIXME: (How) do we best carry around that the results's AsRef is exactly the .len() of the
     // algorithm?
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult;
+    fn finalize(&mut self, instance: Self::State) -> Self::Output;
 
     /// Hash contiguous in-memory data in a single pass.
     ///
@@ -41,7 +41,7 @@ pub trait HashProvider {
     /// Optimized versions are expected to be rare, though, so don't go out of your way using it:
     /// Only buffer the full data, or create special cases for when there actually is just one item
     /// in an iterator, without testing and possibly consulting with the back-end authors first.
-    fn hash(&mut self, algorithm: Self::Algorithm, data: &[u8]) -> Self::HashResult {
+    fn hash(&mut self, algorithm: Self::Algorithm, data: &[u8]) -> Self::Output {
         let mut state = self.init(algorithm);
         self.update(&mut state, data);
         self.finalize(state)

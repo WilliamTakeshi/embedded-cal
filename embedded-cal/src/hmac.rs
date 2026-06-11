@@ -3,23 +3,23 @@ pub trait HmacProvider {
     /// A nascent state that .
     type Key: Clone + Sized;
     /// State carried between rounds of feeding data into the HMAC.
-    type HmacState: Sized;
+    type State: Sized;
     /// Output of an HMAC operation.
-    type HmacResult: AsRef<[u8]>;
+    type Output: AsRef<[u8]>;
 
     /// Starts an HMAC operation based on a key that is entered as raw bytes.
     ///
     /// This is a convenience wrapper for `Self::init(Self::load_from_keydatra(algorithm, key))`.
-    fn init_with_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::HmacState {
+    fn init_with_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::State {
         let key = self.load_from_keydata(algorithm, key);
         self.init(key)
     }
     /// Initializes a key from raw bytes.
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key;
     /// Starts an HMAC operation.
-    fn init(&mut self, key: Self::Key) -> Self::HmacState;
-    fn update(&mut self, state: &mut Self::HmacState, data: &[u8]);
-    fn finalize(&mut self, state: Self::HmacState) -> Self::HmacResult;
+    fn init(&mut self, key: Self::Key) -> Self::State;
+    fn update(&mut self, state: &mut Self::State, data: &[u8]);
+    fn finalize(&mut self, state: Self::State) -> Self::Output;
 
     /// Compute HMAC over contiguous in-memory data in a single pass, based on a key directly
     /// entered as bytes.
@@ -31,7 +31,7 @@ pub trait HmacProvider {
         algorithm: Self::Algorithm,
         key: &[u8],
         data: &[u8],
-    ) -> Self::HmacResult {
+    ) -> Self::Output {
         let mut state = self.init_with_keydata(algorithm, key);
         self.update(&mut state, data);
         self.finalize(state)

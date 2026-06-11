@@ -217,8 +217,8 @@ impl AsRef<[u8]> for HmacResult {
 impl embedded_cal::HmacProvider for Stm32wba55Cal {
     type Algorithm = HmacAlgorithm;
     type Key = HmacState;
-    type HmacState = HmacState;
-    type HmacResult = HmacResult;
+    type State = HmacState;
+    type Output = HmacResult;
 
     fn load_from_keydata(&mut self, algorithm: Self::Algorithm, key: &[u8]) -> Self::Key {
         match algorithm {
@@ -266,11 +266,11 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
         }
     }
 
-    fn init(&mut self, key: Self::Key) -> Self::HmacState {
+    fn init(&mut self, key: Self::Key) -> Self::State {
         key
     }
 
-    fn update(&mut self, state: &mut Self::HmacState, data: &[u8]) {
+    fn update(&mut self, state: &mut Self::State, data: &[u8]) {
         let mut remaining = data;
         let mut wrote_blocks = false;
 
@@ -306,7 +306,7 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
         }
     }
 
-    fn finalize(&mut self, mut state: Self::HmacState) -> Self::HmacResult {
+    fn finalize(&mut self, mut state: Self::State) -> Self::Output {
         // Restore hardware to the last saved context.
         if let Some(ctx) = state.context.take() {
             self.restore_context_hmac(&ctx);
