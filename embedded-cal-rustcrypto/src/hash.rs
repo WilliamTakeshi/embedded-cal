@@ -1,0 +1,79 @@
+use super::*;
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum HashAlgorithm {
+    Sha256,
+}
+
+impl embedded_cal::HashAlgorithm for HashAlgorithm {
+    fn len(&self) -> usize {
+        match self {
+            HashAlgorithm::Sha256 => 32,
+        }
+    }
+
+    fn from_cose_number(number: impl Into<i128>) -> Option<Self> {
+        match number.into() {
+            -16 => Some(HashAlgorithm::Sha256),
+            _ => None,
+        }
+    }
+
+    fn from_ni_id(number: u8) -> Option<Self> {
+        match number {
+            1 => Some(HashAlgorithm::Sha256),
+            _ => None,
+        }
+    }
+
+    fn from_ni_name(name: &str) -> Option<Self> {
+        match name {
+            "sha-256" => Some(HashAlgorithm::Sha256),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum HashState {
+    Sha256(sha2::Sha256),
+}
+
+pub enum HashResult {
+    Sha256([u8; 32]),
+}
+
+impl AsRef<[u8]> for HashResult {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            HashResult::Sha256(r) => &r[..],
+        }
+    }
+}
+
+impl embedded_cal::HashProvider for RustcryptoCal {
+    type Algorithm = HashAlgorithm;
+    type State = HashState;
+    type Output = HashResult;
+
+    fn init(&mut self, algorithm: Self::Algorithm) -> Self::State {
+        match algorithm {
+            // Same for any, really
+            HashAlgorithm::Sha256 => HashState::Sha256(Default::default()),
+        }
+    }
+
+    fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
+        match instance {
+            // Same for any, really
+            HashState::Sha256(s) => s.update(data),
+        }
+    }
+
+    fn finalize(&mut self, instance: Self::State) -> Self::Output {
+        match instance {
+            // Same for any, really
+            HashState::Sha256(s) => HashResult::Sha256(s.finalize().into()),
+        }
+    }
+}
