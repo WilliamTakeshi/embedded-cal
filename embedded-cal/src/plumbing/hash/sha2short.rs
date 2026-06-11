@@ -31,7 +31,7 @@ pub trait Sha2Short {
 
     /// State containing an ongoing operation.
     ///
-    /// Analogous to [`crate::HashProvider::HashState`].
+    /// Analogous to [`crate::HashProvider::State`].
     type State: Sized + Clone;
 
     /// Initiates a [`Self::State`] according to the selected algorithm.
