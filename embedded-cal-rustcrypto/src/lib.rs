@@ -45,8 +45,20 @@ impl Default for RustcryptoCal {
 
 impl embedded_cal::Cal for RustcryptoCal {
     type DhProvider = Self;
+    type AeadProvider = Self;
+    type HashProvider = Self;
+    type HmacProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
+        self
+    }
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        self
+    }
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
         self
     }
 }

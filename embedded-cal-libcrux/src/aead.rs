@@ -1,7 +1,7 @@
 use libcrux_aesgcm::AeadConsts as _;
 use libcrux_traits::aead::typed_owned;
 
-use embedded_cal::AeadProvider;
+use embedded_cal::{AeadProvider, Cal};
 
 use super::*;
 
@@ -10,19 +10,19 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 
 pub enum AeadAlgorithm<EC: ExtenderConfig> {
-    Direct(<EC::Base as AeadProvider>::Algorithm),
+    Direct(<<EC::Base as Cal>::AeadProvider as AeadProvider>::Algorithm),
     AesGcm128,
     AesGcm256,
 }
 
 pub enum Key<EC: ExtenderConfig> {
-    Direct(<EC::Base as AeadProvider>::Key),
+    Direct(<<EC::Base as Cal>::AeadProvider as AeadProvider>::Key),
     AesGcm128(libcrux_aesgcm::AesGcm128Key),
     AesGcm256(libcrux_aesgcm::AesGcm256Key),
 }
 
 pub enum Tag<EC: ExtenderConfig> {
-    Direct(<EC::Base as AeadProvider>::Tag),
+    Direct(<<EC::Base as Cal>::AeadProvider as AeadProvider>::Tag),
     AesGcm128(libcrux_aesgcm::AesGcm128Tag),
     AesGcm256(libcrux_aesgcm::AesGcm256Tag),
 }
@@ -34,7 +34,7 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
 
     fn load_from_keydata(&mut self, alg: Self::Algorithm, key: &[u8]) -> Self::Key {
         match alg {
-            AeadAlgorithm::Direct(alg) => Key::Direct(self.0.load_from_keydata(alg, key)),
+            AeadAlgorithm::Direct(alg) => Key::Direct(self.0.aead().load_from_keydata(alg, key)),
             AeadAlgorithm::AesGcm128 => Key::AesGcm128(
                 <[u8; _]>::try_from(key)
                     .expect("key length mismatch")
@@ -57,7 +57,7 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
     ) -> Self::Tag {
         // Handle the simple case quicly; everything else needs the allocations
         if let Key::Direct(k) = key {
-            return Tag::Direct(self.0.encrypt_in_place(k, nonce, message, aad));
+            return Tag::Direct(self.0.aead().encrypt_in_place(k, nonce, message, aad));
         };
 
         let mut ciphertext = vec![0; message.len()];
@@ -124,7 +124,7 @@ impl<EC: ExtenderConfig> embedded_cal::AeadProvider for Extender<EC> {
     ) -> Result<(), embedded_cal::DecryptionFailed> {
         // Handle the simple case quicly; everything else needs the allocations
         if let Key::Direct(k) = key {
-            return self.0.decrypt_in_place(k, nonce, message, tag, aad);
+            return self.0.aead().decrypt_in_place(k, nonce, message, tag, aad);
         };
 
         let mut ciphertext = Vec::from(&*message);

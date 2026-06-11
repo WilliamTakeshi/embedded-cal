@@ -12,8 +12,23 @@ pub struct EmptyCal<const PLUMBING: bool>;
 // Eventually, we can probbly even drop the Cal impl
 impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
     type DhProvider = Self;
+    type AeadProvider = Self;
+    type HashProvider = Self;
+    type HmacProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
+        self
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        self
+    }
+
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
         self
     }
 }

@@ -45,9 +45,15 @@ pub use rng::test_tryrng;
 ///   would be to go through `AsMut` indirections or use lifetime-generic associated types like
 ///   `type XxxProvider<'t> = &mut Self` / `= Empty`, and that is not only unergonomic, it also
 ///   hinders restraining them in `where` clauses).
-pub trait Cal: HashProvider + HmacProvider + AeadProvider {
+pub trait Cal {
     /// The non-supertrait responsible for key establishment.
     type DhProvider: DhProvider;
+    type AeadProvider: AeadProvider;
+    type HashProvider: HashProvider;
+    type HmacProvider: HmacProvider;
 
     fn dh(&mut self) -> &mut Self::DhProvider;
+    fn aead(&mut self) -> &mut Self::AeadProvider;
+    fn hash(&mut self) -> &mut Self::HashProvider;
+    fn hmac(&mut self) -> &mut Self::HmacProvider;
 }

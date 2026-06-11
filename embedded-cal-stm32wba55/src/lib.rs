@@ -31,9 +31,22 @@ pub struct Stm32wba55Cal {
 
 impl embedded_cal::Cal for Stm32wba55Cal {
     type DhProvider = EmptyCal<false>;
+    type AeadProvider = Self;
+    type HashProvider = EmptyCal<false>;
+    type HmacProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         &mut self.empty
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self
+    }
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        &mut self.empty
+    }
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self
     }
 }
 
@@ -151,24 +164,6 @@ struct Context {
     str: hash::regs::Str,
     /// HASH interrupt enable register (HASH_IMR)
     imr: hash::regs::Imr,
-}
-
-impl embedded_cal::HashProvider for Stm32wba55Cal {
-    type Algorithm = embedded_cal::empty::NoAlgorithms;
-    type HashState = embedded_cal::empty::NoAlgorithms;
-    type HashResult = embedded_cal::empty::NoAlgorithms;
-
-    fn init(&mut self, algorithm: Self::Algorithm) -> Self::HashState {
-        match algorithm {}
-    }
-
-    fn update(&mut self, instance: &mut Self::HashState, _data: &[u8]) {
-        match *instance {}
-    }
-
-    fn finalize(&mut self, instance: Self::HashState) -> Self::HashResult {
-        match instance {}
-    }
 }
 
 /// HMAC algorithm identifier for the STM32WBA55 hardware accelerator.
