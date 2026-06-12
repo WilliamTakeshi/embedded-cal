@@ -19,6 +19,7 @@ struct TestState {
 mod tests {
     use super::ImplementSha256Short;
     use embedded_cal::Cal;
+    use embedded_cal_nrf54l15::Nrf54l15Cal;
 
     #[init]
     fn init() -> super::TestState {
@@ -65,5 +66,27 @@ mod tests {
     #[test]
     fn test_aead_aesccm_16_64_256(state: &mut super::TestState) {
         testvectors::test_aead_aesccm_16_64_256(state.cal.aead());
+    }
+
+    #[test]
+    fn test_dh_ecdh_p256(state: &mut super::TestState) {
+        embedded_cal::test_dh_algorithm_ecdh_p256::<Nrf54l15Cal>();
+        for v in testvectors::dh::RFC5903_P256 {
+            v.test_with(state.cal.dh());
+        }
+    }
+
+    #[test]
+    fn test_dh_x25519(state: &mut super::TestState) {
+        for v in testvectors::dh::RFC7748_X25519 {
+            v.test_with(state.cal.dh());
+        }
+    }
+
+    #[test]
+    fn test_dh_x448(state: &mut super::TestState) {
+        for v in testvectors::dh::RFC7748_X448 {
+            v.test_with(state.cal.dh());
+        }
     }
 }
