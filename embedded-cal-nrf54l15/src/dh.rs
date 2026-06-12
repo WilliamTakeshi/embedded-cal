@@ -2,6 +2,7 @@ use embedded_cal::DhAlgorithm as _;
 use nrf_pac::common::{RW, Reg};
 use nrf_pac::cracencore::vals::{Selcurve, Swapbytes};
 use rand_core::Rng as _;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const CRACEN_PKE_RAM_BASE: u32 = 0x5180_8000;
 const SLOT_SIZE: u32 = 0x200;
@@ -302,7 +303,7 @@ fn clamp_x448(k: &mut [u8; 56]) {
     k[55] |= 0x80;
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Zeroize)]
 pub enum DhAlgorithm {
     EcdhP256,
     X25519,
@@ -327,12 +328,14 @@ impl embedded_cal::DhAlgorithm for DhAlgorithm {
     }
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey {
     alg: DhAlgorithm,
     // First `alg.output_length()` bytes are valid.
     scalar: [u8; 56],
 }
 
+#[derive(Zeroize)]
 pub struct VisibleSecretKey(SecretKey);
 
 impl From<VisibleSecretKey> for SecretKey {
@@ -349,6 +352,7 @@ pub struct PublicKey {
     y: [u8; 32],
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SharedSecret {
     bytes: [u8; 56],
     len: usize,
@@ -406,6 +410,10 @@ impl super::Nrf54l15Cal {
         let mut ry = [0u8; 32];
         read_pke_le(slot_addr(SLOT_RESULT_X), &mut rx);
         read_pke_le(slot_addr(SLOT_RESULT_Y), &mut ry);
+        // Zero the private scalar from PKE RAM before returning.
+        for i in 0..8u32 {
+            pke_ram_word(slot_addr(SLOT_SCALAR) + i * 4).write_value(0u32);
+        }
         (rx, ry)
     }
 
@@ -465,6 +473,10 @@ impl super::Nrf54l15Cal {
 
         let mut result = [0u8; N];
         read_pke_le(montgomery_slot_addr(MG_SLOT_OUT), &mut result);
+        // Zero the private scalar from PKE RAM before returning.
+        for i in 0..(N / 4) {
+            pke_ram_word(montgomery_slot_addr(MG_SLOT_K) + i as u32 * 4).write_value(0u32);
+        }
         result
     }
 
@@ -574,11 +586,12 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         }
         match private.alg {
             DhAlgorithm::EcdhP256 => {
-                let scalar32: [u8; 32] = private.scalar[..32]
+                let mut scalar32: [u8; 32] = private.scalar[..32]
                     .try_into()
                     .expect("slice is always 32 bytes");
                 let px32: [u8; 32] = public.x[..32].try_into().expect("slice is always 32 bytes");
                 let (result_x, _) = self.cracen_ecc_mult(&scalar32, &px32, &public.y);
+                scalar32.zeroize();
                 let mut bytes = [0u8; 56];
                 bytes[..32].copy_from_slice(&result_x);
                 Ok(SharedSecret { bytes, len: 32 })
@@ -591,6 +604,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
                 let mut u: [u8; 32] = public.x[..32].try_into().expect("slice is always 32 bytes");
                 u[31] &= 0x7F;
                 let result = self.cracen_x25519_mult(&k, &u);
+                k.zeroize();
                 let mut bytes = [0u8; 56];
                 bytes[..32].copy_from_slice(&result);
                 Ok(SharedSecret { bytes, len: 32 })
@@ -600,6 +614,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
                 clamp_x448(&mut k);
                 let u: [u8; 56] = public.x;
                 let x = self.cracen_x448_mult(&k, &u);
+                k.zeroize();
                 Ok(SharedSecret { bytes: x, len: 56 })
             }
         }
@@ -608,10 +623,11 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
         match private.alg {
             DhAlgorithm::EcdhP256 => {
-                let scalar32: [u8; 32] = private.scalar[..32]
+                let mut scalar32: [u8; 32] = private.scalar[..32]
                     .try_into()
                     .expect("slice is always 32 bytes");
                 let (rx, ry) = self.cracen_ecc_mult(&scalar32, &P256_GX, &P256_GY);
+                scalar32.zeroize();
                 let mut x = [0u8; 56];
                 x[..32].copy_from_slice(&rx);
                 PublicKey {
@@ -628,6 +644,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
                 let mut base_u = [0u8; 32];
                 base_u[0] = 9; // X25519 base point u-coordinate = 9 (little-endian)
                 let u = self.cracen_x25519_mult(&k, &base_u);
+                k.zeroize();
                 let mut x = [0u8; 56];
                 x[..32].copy_from_slice(&u);
                 PublicKey {
@@ -642,6 +659,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
                 let mut base_u = [0u8; 56];
                 base_u[0] = 5; // X448 base point u-coordinate = 5 (little-endian)
                 let x = self.cracen_x448_mult(&k, &base_u);
+                k.zeroize();
                 PublicKey {
                     alg: private.alg.clone(),
                     x,

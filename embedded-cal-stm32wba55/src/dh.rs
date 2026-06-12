@@ -1,4 +1,5 @@
 use rand_core::Rng;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 // P-256 curve constants (little-endian word order: LSW at index 0)
 
@@ -263,7 +264,7 @@ fn p256_recover_y(x_bytes: &[u8; 32]) -> Result<[u8; 32], embedded_cal::ImportEr
     Ok(words_to_bytes(&y))
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Zeroize)]
 pub enum DhAlgorithm {
     EcdhP256,
 }
@@ -283,11 +284,13 @@ impl embedded_cal::DhAlgorithm for DhAlgorithm {
     }
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey {
     alg: DhAlgorithm,
     scalar: [u8; 32],
 }
 
+#[derive(Zeroize)]
 pub struct VisibleSecretKey(SecretKey);
 
 impl From<VisibleSecretKey> for SecretKey {
@@ -302,6 +305,7 @@ pub struct PublicKey {
     y: [u8; 32],
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SharedSecret([u8; 32]);
 
 impl super::Stm32wba55Cal {
@@ -381,6 +385,9 @@ impl super::Stm32wba55Cal {
             w.set_operrfc(true);
         });
 
+        // Zero PKA RAM to clear the private scalar (RAM_K) and result coordinates.
+        self.pka_zero_ram();
+
         (result_x, result_y)
     }
 }
@@ -447,17 +454,20 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         if private.alg != public.alg {
             return Err(embedded_cal::IncompatibleKeys);
         }
+        let mut scalar_words = bytes_to_words(&private.scalar);
         let (result_x, _) = self.pka_ecc_mult(
-            &bytes_to_words(&private.scalar),
+            &scalar_words,
             &bytes_to_words(&public.x),
             &bytes_to_words(&public.y),
         );
+        scalar_words.zeroize();
         Ok(SharedSecret(words_to_bytes(&result_x)))
     }
 
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
-        let (result_x, result_y) =
-            self.pka_ecc_mult(&bytes_to_words(&private.scalar), &P256_GX, &P256_GY);
+        let mut scalar_words = bytes_to_words(&private.scalar);
+        let (result_x, result_y) = self.pka_ecc_mult(&scalar_words, &P256_GX, &P256_GY);
+        scalar_words.zeroize();
         PublicKey {
             alg: private.alg.clone(),
             x: words_to_bytes(&result_x),
