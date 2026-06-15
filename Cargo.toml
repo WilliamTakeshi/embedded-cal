@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
+
 [workspace]
 members = ["embedded-cal", "embedded-cal-rustcrypto", "embedded-cal-software-demo", "embedded-cal-nrf54l15", "embedded-cal-stm32wba55", "testvectors", "embedded-cal-libcrux"]
 default-members = ["embedded-cal", "embedded-cal-rustcrypto", "embedded-cal-libcrux", "embedded-cal-software-demo", "testvectors"]
