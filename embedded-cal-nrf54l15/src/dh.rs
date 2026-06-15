@@ -65,13 +65,16 @@ fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
         addr >= CRACEN_PKE_RAM_BASE && addr + 4 <= CRACEN_PKE_RAM_END,
         "addr {addr:#010x} out of PKE RAM range {CRACEN_PKE_RAM_BASE:#010x}..{CRACEN_PKE_RAM_END:#010x}"
     );
-    debug_assert!(addr % 4 == 0, "addr {addr:#010x} is not word-aligned");
+    debug_assert!(
+        addr.is_multiple_of(4),
+        "addr {addr:#010x} is not word-aligned"
+    );
     // Safety: addr is always a valid CRACEN PKE RAM address derived from CRACEN_PKE_RAM_BASE.
     unsafe { Reg::from_ptr(addr as *mut u32) }
 }
 
 fn write_pke_le(addr: u32, data: &[u8]) {
-    debug_assert!(data.len() % 4 == 0, "function expects word sized data");
+    debug_assert!(addr.is_multiple_of(4), "function expects word sized data");
     for (i, chunk) in data.chunks_exact(4).enumerate() {
         let v = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         pke_ram_word(addr + i as u32 * 4).write_value(v);
