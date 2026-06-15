@@ -2,7 +2,7 @@
 // Source: sdk-nrf subsys/nrf_security/src/drivers/cracen/cracenpsa/src/microcode_binary.h
 // Must be loaded to 0x5180_C000 before any PKE operation.
 
-const BASE: u32 = 0x5180_C000;
+pub(crate) const BASE: u32 = 0x5180_C000;
 
 pub(super) unsafe fn load() {
     let mut p = BASE as *mut u32;

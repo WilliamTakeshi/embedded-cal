@@ -5,24 +5,47 @@ use nrf_pac::cracencore::vals::{Selcurve, Swapbytes};
 use rand_core::Rng as _;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+// PKE data as described in nRF54L15_nRF54L10_nRF54L05_Datasheet_v1.0.pdf
 const CRACEN_PKE_RAM_BASE: u32 = 0x5180_8000;
+// PKE data ram space ends on microcode
+const CRACEN_PKE_RAM_END: u32 = crate::microcode::BASE;
+// Slot size equals HWCONFIG.MAXOPSIZE (= 0x200 on nRF54L15); see sdk-nrf pk_baremetal.c.
 const SLOT_SIZE: u32 = 0x200;
+// PKECOMMAND.OPBYTESM1 encodes operand width as (bytes − 1); P-256 uses 32-byte scalars → 31.
 const BYTES_M1: u16 = 31;
 
-// P-256: big-endian; 32-byte operands sit at the END of the slot.
+// In big-endian (ECC) mode the BA414ep right-aligns operands within the slot:
+// a 32-byte P-256 value is placed at byte offset (512 - 32) = 480 within its slot.
+// See sx_pk_list_ecc_inslots() in sdk-nrf pkhardware_ba414e.c: `cryptoram += slot_size - op_size`.
 const P256_SLOT_OFFSET: u32 = SLOT_SIZE - 32;
+
+// Slot indices for ECC point multiplication (PK_OP_ECC_PTMUL = 0x22, sdk-nrf regs_commands.h).
+// Derived from sdk-nrf op_slots.h: OP_SLOT_ECC_PTMUL_K/P/R and the BA414ep pointer registers.
+const PKE_OPCODE_ECC_MULT: u8 = 0x22;
+// OP_SLOT_ECC_PTMUL_K = 8: private scalar written here before the operation.
 const SLOT_SCALAR: u32 = 8;
+// OP_SLOT_ECC_PTMUL_P = 12: x-coordinate of the input point.
+// y-coordinate follows in the adjacent slot (BA414ep always stores affine points as consecutive x/y slots).
 const SLOT_POINT_X: u32 = 12;
 const SLOT_POINT_Y: u32 = 13;
+// OP_SLOT_ECC_PTMUL_R = 10: x-coordinate of the result point.
+// y-coordinate follows in the adjacent slot.
 const SLOT_RESULT_X: u32 = 10;
 const SLOT_RESULT_Y: u32 = 11;
-const PKE_OPCODE_ECC_MULT: u8 = 0x22;
 
-// Montgomery curves (X25519, X448): little-endian operands sit at the START of the slot.
-const MG_SLOT_U: u32 = 6;
-const MG_SLOT_K: u32 = 8;
-const MG_SLOT_OUT: u32 = 10;
+// Slot indices for Montgomery curve point multiplication (PK_OP_MG_PTMUL = 0x28, sdk-nrf regs_commands.h).
+// Little-endian; operands sit at the START of the slot (no P256_SLOT_OFFSET equivalent).
+// Montgomery uses the default BA414ep pointer registers (OP_SLOT_PTR_A/B/C from sdk-nrf op_slots.h).
+// For X448, slots 0 and 1 must also be loaded with the curve prime and coefficient A before the operation
+// (X25519 skips this because Selcurve::CURVE25519 has those parameters hardcoded in hardware).
 const PKE_OPCODE_MONTGOMERY_PTMUL: u8 = 0x28;
+// OP_SLOT_PTR_A = 6: u-coordinate of the input point (RFC 7748 notation for the Montgomery x-coordinate).
+const MG_SLOT_U: u32 = 6;
+// OP_SLOT_PTR_B = 8: scalar k (private key); zeroed from PKE RAM after the operation.
+const MG_SLOT_K: u32 = 8;
+// OP_SLOT_PTR_C = 10: output u-coordinate of the resulting point.
+const MG_SLOT_OUT: u32 = 10;
+// OPBYTESM1 for X448: 56-byte scalars → 55.
 const X448_BYTES_M1: u16 = 55;
 
 // Big-endian slot address (P-256): data at end of slot.
@@ -38,6 +61,11 @@ fn montgomery_slot_addr(slot: u32) -> u32 {
 }
 
 fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
+    debug_assert!(
+        addr >= CRACEN_PKE_RAM_BASE && addr + 4 <= CRACEN_PKE_RAM_END,
+        "addr {addr:#010x} out of PKE RAM range {CRACEN_PKE_RAM_BASE:#010x}..{CRACEN_PKE_RAM_END:#010x}"
+    );
+    debug_assert!(addr % 4 == 0, "addr {addr:#010x} is not word-aligned");
     // Safety: addr is always a valid CRACEN PKE RAM address derived from CRACEN_PKE_RAM_BASE.
     unsafe { Reg::from_ptr(addr as *mut u32) }
 }
