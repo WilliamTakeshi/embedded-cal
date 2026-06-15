@@ -1,4 +1,6 @@
-use embedded_cal::p256::{B, P, P256_ORDER, bytes_to_words, ge, p256_recover_y, words_to_bytes};
+use embedded_cal::p256::{
+    B, P, P256_GX, P256_GY, P256_ORDER, bytes_to_words, ge, p256_recover_y, words_to_bytes,
+};
 use rand_core::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -10,28 +12,6 @@ enum CoefSign {
     _Positive = 0, // unused: P-256 coefficient a is always negative
     Negative = 1,
 }
-
-const P256_GX: [u32; 8] = [
-    0xd898_c296,
-    0xf4a1_3945,
-    0x2deb_33a0,
-    0x7703_7d81,
-    0x63a4_40f2,
-    0xf8bc_e6e5,
-    0xe12c_4247,
-    0x6b17_d1f2,
-];
-
-const P256_GY: [u32; 8] = [
-    0x37bf_51f5,
-    0xcbb6_4068,
-    0x6b31_5ece,
-    0x2bce_3357,
-    0x7c0f_9e16,
-    0x8ee7_eb4a,
-    0xfe1a_7f9b,
-    0x4fe3_42e2,
-];
 
 // PKA RAM slot indices for ECC scalar multiplication (STM32WBA55 RM0493)
 

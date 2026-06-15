@@ -1,5 +1,7 @@
 use embedded_cal::DhAlgorithm as _;
-use embedded_cal::p256::{P256_ORDER, bytes_to_words, ge, p256_recover_y};
+use embedded_cal::p256::{
+    P256_GX_BYTES, P256_GY_BYTES, P256_ORDER, bytes_to_words, ge, p256_recover_y,
+};
 use nrf_pac::common::{RW, Reg};
 use nrf_pac::cracencore::vals::{Selcurve, Swapbytes};
 use rand_core::Rng as _;
@@ -86,16 +88,6 @@ fn read_pke_le(addr: u32, out: &mut [u8]) {
         chunk.copy_from_slice(&pke_ram_word(addr + i as u32 * 4).read().to_le_bytes());
     }
 }
-
-// P-256 generator point (big-endian bytes, for use with cracen_ecc_mult).
-const P256_GX: [u8; 32] = [
-    0x6b, 0x17, 0xd1, 0xf2, 0xe1, 0x2c, 0x42, 0x47, 0xf8, 0xbc, 0xe6, 0xe5, 0x63, 0xa4, 0x40, 0xf2,
-    0x77, 0x03, 0x7d, 0x81, 0x2d, 0xeb, 0x33, 0xa0, 0xf4, 0xa1, 0x39, 0x45, 0xd8, 0x98, 0xc2, 0x96,
-];
-const P256_GY: [u8; 32] = [
-    0x4f, 0xe3, 0x42, 0xe2, 0xfe, 0x1a, 0x7f, 0x9b, 0x8e, 0xe7, 0xeb, 0x4a, 0x7c, 0x0f, 0x9e, 0x16,
-    0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e, 0xce, 0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5,
-];
 
 // X448 curve parameters (little-endian, from CRACEN SDK silexpk/target/hw/ba414/ec_curves.c).
 // p = 2^448 - 2^224 - 1 (byte 28 = 0xFE; all others 0xFF in LE)
@@ -449,7 +441,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
                 let mut scalar32: [u8; 32] = private.scalar[..32]
                     .try_into()
                     .expect("slice is always 32 bytes");
-                let (rx, ry) = self.cracen_p256_mult(&scalar32, &P256_GX, &P256_GY);
+                let (rx, ry) = self.cracen_p256_mult(&scalar32, &P256_GX_BYTES, &P256_GY_BYTES);
                 scalar32.zeroize();
                 let mut x = [0u8; 56];
                 x[..32].copy_from_slice(&rx);
