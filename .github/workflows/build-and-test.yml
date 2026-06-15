@@ -63,3 +63,14 @@ jobs:
 #       run: |
 #         curl -o Makefile https://gist.githubusercontent.com/W95Psp/4c304132a1f85c5af4e4959dd6b356c3/raw/Makefile
 #         make verify
+
+  check-algorithms-state:
+    name: Check whether any algorithms or implementations were added
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v5
+    - name: Update files
+      run: ./helpers/grep-algorithms.sh
+    - name: Verify that there are no changes. If this fails, update ALGORITHMS.md if needed and check in the output of ./helpers/grep-algorithms.sh to confirm that the former is up to date.
+      run: git diff --exit-code ./helpers/ALGORITHMS.cache/
