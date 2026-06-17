@@ -62,7 +62,10 @@ fn montgomery_slot_addr(slot: u32) -> u32 {
     CRACEN_PKE_RAM_BASE + slot * SLOT_SIZE
 }
 
-fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
+/// # Safety
+/// `addr` must be a word-aligned address within PKE RAM
+/// (`CRACEN_PKE_RAM_BASE..CRACEN_PKE_RAM_END`).
+unsafe fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
     debug_assert!(
         addr >= CRACEN_PKE_RAM_BASE && addr + 4 <= CRACEN_PKE_RAM_END,
         "addr {addr:#010x} out of PKE RAM range {CRACEN_PKE_RAM_BASE:#010x}..{CRACEN_PKE_RAM_END:#010x}"
@@ -71,21 +74,26 @@ fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
         addr.is_multiple_of(4),
         "addr {addr:#010x} is not word-aligned"
     );
-    // Safety: addr is always a valid CRACEN PKE RAM address derived from CRACEN_PKE_RAM_BASE.
     unsafe { Reg::from_ptr(addr as *mut u32) }
 }
 
-fn write_pke_le(addr: u32, data: &[u8]) {
+/// # Safety
+/// `addr` must be a word-aligned address within PKE RAM
+/// (`CRACEN_PKE_RAM_BASE..CRACEN_PKE_RAM_END`).
+unsafe fn write_pke_le(addr: u32, data: &[u8]) {
     debug_assert!(addr.is_multiple_of(4), "function expects word sized data");
     for (i, chunk) in data.chunks_exact(4).enumerate() {
         let v = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        pke_ram_word(addr + i as u32 * 4).write_value(v);
+        unsafe { pke_ram_word(addr + i as u32 * 4).write_value(v) };
     }
 }
 
-fn read_pke_le(addr: u32, out: &mut [u8]) {
+/// # Safety
+/// `addr` must be a word-aligned address within PKE RAM
+/// (`CRACEN_PKE_RAM_BASE..CRACEN_PKE_RAM_END`).
+unsafe fn read_pke_le(addr: u32, out: &mut [u8]) {
     for (i, chunk) in out.chunks_exact_mut(4).enumerate() {
-        chunk.copy_from_slice(&pke_ram_word(addr + i as u32 * 4).read().to_le_bytes());
+        chunk.copy_from_slice(&unsafe { pke_ram_word(addr + i as u32 * 4).read() }.to_le_bytes());
     }
 }
 
@@ -196,9 +204,12 @@ impl super::Nrf54l15Cal {
 
         self.wait_pk_ready();
 
-        write_pke_le(slot_addr(SLOT_SCALAR), scalar);
-        write_pke_le(slot_addr(SLOT_POINT_X), px);
-        write_pke_le(slot_addr(SLOT_POINT_Y), py);
+        // Safety: slot addresses are derived from slot constants, statically in PKE RAM range;
+        unsafe {
+            write_pke_le(slot_addr(SLOT_SCALAR), scalar);
+            write_pke_le(slot_addr(SLOT_POINT_X), px);
+            write_pke_le(slot_addr(SLOT_POINT_Y), py);
+        }
 
         self.cracen_core.pk().pointers().write(|w| {
             w.set_opptra(SLOT_POINT_X as u8);
@@ -223,11 +234,14 @@ impl super::Nrf54l15Cal {
 
         let mut rx = [0u8; 32];
         let mut ry = [0u8; 32];
-        read_pke_le(slot_addr(SLOT_RESULT_X), &mut rx);
-        read_pke_le(slot_addr(SLOT_RESULT_Y), &mut ry);
-        // Zero the private scalar from PKE RAM before returning.
-        for i in 0..8u32 {
-            pke_ram_word(slot_addr(SLOT_SCALAR) + i * 4).write_value(0u32);
+        // Safety: slot addresses are derived from slot constants, statically in PKE RAM range;
+        unsafe {
+            read_pke_le(slot_addr(SLOT_RESULT_X), &mut rx);
+            read_pke_le(slot_addr(SLOT_RESULT_Y), &mut ry);
+            // Zero the private scalar from PKE RAM before returning.
+            for i in 0..8u32 {
+                pke_ram_word(slot_addr(SLOT_SCALAR) + i * 4).write_value(0u32);
+            }
         }
         (rx, ry)
     }
@@ -257,13 +271,15 @@ impl super::Nrf54l15Cal {
 
         self.wait_pk_ready();
 
-        if let Some((prime, coeff_a)) = curve_params {
-            write_pke_le(montgomery_slot_addr(0), prime);
-            write_pke_le(montgomery_slot_addr(1), coeff_a);
+        // Safety: slot addresses are derived from slot constants, statically in PKE RAM range;
+        unsafe {
+            if let Some((prime, coeff_a)) = curve_params {
+                write_pke_le(montgomery_slot_addr(0), prime);
+                write_pke_le(montgomery_slot_addr(1), coeff_a);
+            }
+            write_pke_le(montgomery_slot_addr(MG_SLOT_U), u_coord);
+            write_pke_le(montgomery_slot_addr(MG_SLOT_K), scalar);
         }
-
-        write_pke_le(montgomery_slot_addr(MG_SLOT_U), u_coord);
-        write_pke_le(montgomery_slot_addr(MG_SLOT_K), scalar);
 
         self.cracen_core.pk().pointers().write(|w| {
             w.set_opptra(MG_SLOT_U as u8);
@@ -287,10 +303,13 @@ impl super::Nrf54l15Cal {
         );
 
         let mut result = [0u8; N];
-        read_pke_le(montgomery_slot_addr(MG_SLOT_OUT), &mut result);
-        // Zero the private scalar from PKE RAM before returning.
-        for i in 0..(N / 4) {
-            pke_ram_word(montgomery_slot_addr(MG_SLOT_K) + i as u32 * 4).write_value(0u32);
+        // Safety: slot addresses are derived from slot constants, statically in PKE RAM range;
+        unsafe {
+            read_pke_le(montgomery_slot_addr(MG_SLOT_OUT), &mut result);
+            // Zero the private scalar from PKE RAM before returning.
+            for i in 0..(N / 4) {
+                pke_ram_word(montgomery_slot_addr(MG_SLOT_K) + i as u32 * 4).write_value(0u32);
+            }
         }
         result
     }
