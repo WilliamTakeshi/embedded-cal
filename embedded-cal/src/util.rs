@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 //! Tools helpful in implementing `embedded-cal`
 
 /// A 2-variant generic enum, useful for writing implementations that provide some own variants on
