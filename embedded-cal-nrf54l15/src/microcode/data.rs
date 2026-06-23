@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+// SPDX-FileCopyrightText: Copyright (c) 2024 Nordic Semiconductor ASA
+
 // CRACEN PKE microcode (4892 bytes = 1223 u32 words).
 // Source: sdk-nrf subsys/nrf_security/src/drivers/cracen/cracenpsa/src/microcode_binary.h
 // Must be loaded to 0x5180_C000 before any PKE operation.
