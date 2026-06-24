@@ -79,7 +79,7 @@ impl<Base: Cal> DhProvider for RustcryptoCalExtender<Base> {
                 .into(),
             ),
             (SecretKey::X25519(secret_key), PublicKey::X25519(public_key)) => {
-                SharedSecret::Length32(secret_key.diffie_hellman(public_key).to_bytes().into())
+                SharedSecret::Length32(secret_key.diffie_hellman(public_key).to_bytes())
             }
             (SecretKey::Direct(secret_key), PublicKey::Direct(public_key)) => {
                 SharedSecret::Direct(self.base.dh().shared_secret(secret_key, public_key)?)

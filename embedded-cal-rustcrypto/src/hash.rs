@@ -24,7 +24,7 @@ impl<BA: embedded_cal::HashAlgorithm> embedded_cal::HashAlgorithm for HashAlgori
         if let Some(a) = BA::from_cose_number(number) {
             return Some(HashAlgorithm::Direct(a));
         }
-        match number.into() {
+        match number {
             -16 => Some(HashAlgorithm::Sha256),
             _ => None,
         }
