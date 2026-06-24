@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
+/* SPDX-License-Identifier: MIT OR Apache-2.0 */
+/* SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss */
 
 PROVIDE(WWDG = DefaultHandler);
 PROVIDE(PDV = DefaultHandler);

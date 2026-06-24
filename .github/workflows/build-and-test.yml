@@ -40,12 +40,14 @@ jobs:
       uses: actions/checkout@v5
     - name: Add embedded target
       run: rustup target add thumbv8m.main-none-eabihf
-    - name: cargo check nRF54L15 (lib + tests)
+    - name: Install flip-link
+      run: cargo install flip-link
+    - name: cargo build nRF54L15 (lib + tests)
       working-directory: embedded-cal-nrf54l15
-      run: cargo check --tests
-    - name: cargo check STM32WBA55 (lib + tests)
+      run: cargo build --tests
+    - name: cargo build STM32WBA55 (lib + tests)
       working-directory: embedded-cal-stm32wba55
-      run: cargo check --tests
+      run: cargo build --tests
 
 #   generate-fstar:
 #     runs-on: ubuntu-latest
