@@ -11,18 +11,6 @@ pub struct HashState {
     state: Option<[u8; 32]>,
 }
 
-pub enum HashResult {
-    Sha256([u8; 32]),
-}
-
-impl AsRef<[u8]> for HashResult {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            HashResult::Sha256(r) => &r[..],
-        }
-    }
-}
-
 impl embedded_cal::plumbing::Plumbing for super::Nrf54l15Cal {}
 
 impl embedded_cal::plumbing::hash::Hash for super::Nrf54l15Cal {}
