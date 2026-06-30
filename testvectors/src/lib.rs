@@ -388,6 +388,7 @@ impl AeadCase {
         // FIXME: try again with chunked AAD
 
         let produced_tag = cal.encrypt_in_place(&key, self.nonce, buf, self.aad);
+
         assert_eq!(
             produced_tag.as_ref(),
             self.tag,
@@ -400,7 +401,6 @@ impl AeadCase {
             "ciphertext mismatch: expected {:02x?}, got {:02x?}",
             self.ciphertext, buf
         );
-
         cal.decrypt_in_place(&key, self.nonce, buf, self.tag, self.aad)
             .unwrap();
         assert_eq!(
