@@ -167,7 +167,7 @@ impl<'mem, const N: usize> DescriptorChain<'mem, Input, N> {
     /// # Safety / Correctness requirements
     ///
     /// - `data` must be DMA-accessible memory.
-    /// - `data.len()` must be a multiple of 4.
+    /// - The cumulative bytes since the last realign point must be a multiple of 4.
     pub(crate) fn push(&mut self, data: &'mem [u8], dmatag: u32) {
         // Realigning descriptor: the cumulative byte count fed since the last realign point (any
         // preceding `push_raw` bytes plus this descriptor) must land on a word boundary, otherwise
@@ -223,7 +223,7 @@ impl<'mem, const N: usize> DescriptorChain<'mem, Output, N> {
     /// # Safety / Correctness requirements
     ///
     /// - `data` must be DMA-accessible memory.
-    /// - `data.len()` must be a multiple of 4.
+    /// - The cumulative bytes since the last realign point must be a multiple of 4.
     pub(crate) fn push(&mut self, data: &'mem mut [u8], dmatag: u32) {
         // Realigning descriptor: the cumulative byte count fed since the last realign point must land
         // on a word boundary before the fetcher flushes.
@@ -234,6 +234,40 @@ impl<'mem, const N: usize> DescriptorChain<'mem, Output, N> {
         );
         self.pending = 0;
         self.push_descriptor(Descriptor::new(data.as_mut_ptr(), sz(data.len()), dmatag));
+    }
+
+    /// Like [`push`](Self::push), but accepts a raw pointer for in-place DMA (same
+    /// buffer used as both input and output), where the borrow checker would otherwise
+    /// reject the simultaneous immutable + mutable borrows.
+    ///
+    /// # Safety
+    /// - `ptr` must point to at least `len` writable, DMA-accessible bytes.
+    /// - The memory must remain live for the duration of the DMA transfer.
+    /// - The cumulative bytes since the last realign point must be a multiple of 4.
+    pub(crate) unsafe fn push_ptr(&mut self, ptr: *mut u8, len: usize, dmatag: u32) {
+        self.pending += len;
+        debug_assert!(
+            self.pending.is_multiple_of(4),
+            "cumulative bytes at a realign point must be a multiple of the word size"
+        );
+        self.pending = 0;
+        self.push_descriptor(Descriptor::new(ptr, sz(len), dmatag));
+    }
+
+    /// Raw-pointer, non-realigning counterpart to [`push_ptr`](Self::push_ptr): the pusher keeps its
+    /// partial-word accumulator across this descriptor, so a sub-word tail is written contiguously
+    /// into the *next* descriptor instead of being flushed past `ptr`. Used to write an in-place
+    /// payload of arbitrary length straight into the caller's buffer, with the trailing padding
+    /// output sunk by a following realigning [`push`](Self::push).
+    ///
+    /// Must **not** be the last descriptor of a data type (see the input `push_raw`).
+    ///
+    /// # Safety
+    /// - `ptr` must point to at least `len` writable, DMA-accessible bytes.
+    /// - The memory must remain live for the duration of the DMA transfer.
+    pub(crate) unsafe fn push_ptr_raw(&mut self, ptr: *mut u8, len: usize, dmatag: u32) {
+        self.pending += len;
+        self.push_descriptor(Descriptor::new(ptr, len as u32, dmatag));
     }
 }
 

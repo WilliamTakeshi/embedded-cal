@@ -32,6 +32,7 @@ const AES_CMD_CCM_ENCRYPT: u32 = AES_CCM_MODE; // 0x2000
 const AES_CMD_CCM_DECRYPT: u32 = AES_CCM_MODE | 1; // 0x2001
 
 use crate::descriptor::{DescriptorChain, Input, Output, dmatag_ign};
+use zeroize::Zeroize;
 
 /// Pushes the CCM header (the `DMATAG_AES_AAD` descriptors) onto `input_chain`: B0, then — when
 /// AAD is present — the 2-byte big-endian length prefix, the AAD chunks streamed straight from the
@@ -151,17 +152,14 @@ impl super::Nrf54l15Cal {
         let header_padded_len = (header_data_len + 15) & !15;
         let header_ign = header_padded_len - header_data_len;
 
-        // Plaintext, zero-padded to 16-byte multiple; max 255 B → 256 B.
         let msg_padded_len = (message.len() + 15) & !15;
         let msg_ign = msg_padded_len - message.len();
-        let mut msg_in_buf = [0u8; 256];
-        msg_in_buf[..message.len()].copy_from_slice(message);
+        let mut pad_out = [0u8; 16];
 
-        let mut ct_buf = [0u8; 256];
         let mut tag_out_buf = [0u8; 16];
         // The BA411E emits one output byte per header input byte (intermediate
-        // CBC-MAC state). Absorb those into a scratch buffer so that ct_buf and
-        // tag_out_buf receive the correct ciphertext and tag.
+        // CBC-MAC state). Absorb those into scratch buffers so that the ciphertext
+        // and tag_out_buf receive the correct ciphertext and tag.
         let mut b0_out_buf = [0u8; 16];
         // One output byte per header input byte after B0: aad_len (2 B) + aad + zero-pad =
         // header_padded_len - 16 B (max 288 - 16 = 272). Output count matches input exactly.
@@ -183,23 +181,37 @@ impl super::Nrf54l15Cal {
             &header_pad[..header_ign],
         );
         if !message.is_empty() {
-            input_chain.push(
-                &msg_in_buf[..msg_padded_len],
-                DMATAG_AES_DATA | dmatag_ign(msg_ign),
-            );
+            if msg_ign == 0 {
+                // Already block-aligned: the last data descriptor MUST realign.
+                input_chain.push(message, DMATAG_AES_DATA);
+            } else {
+                input_chain.push_raw(message, DMATAG_AES_DATA);
+                input_chain.push(
+                    &header_pad[..msg_ign],
+                    DMATAG_AES_DATA | dmatag_ign(msg_ign),
+                );
+            }
         }
         output_chain.push(&mut b0_out_buf, 0);
         if aad_len > 0 {
             output_chain.push(&mut header_aad_out_buf[..header_padded_len - 16], 0);
         }
         if !message.is_empty() {
-            output_chain.push(&mut ct_buf[..msg_padded_len], 0);
+            // SAFETY: input_chain holds &message immutably; msg_ptr
+            // lets the output chain write to the same region in-place.
+            // BA411E serialises the read and write passes.
+            let msg_ptr = message.as_ptr() as *mut u8;
+            if msg_ign == 0 {
+                // Already block-aligned: the last data descriptor MUST realign.
+                unsafe { output_chain.push_ptr(msg_ptr, message.len(), 0) };
+            } else {
+                unsafe { output_chain.push_ptr_raw(msg_ptr, message.len(), 0) };
+                output_chain.push(&mut pad_out[..msg_ign], 0);
+            }
         }
         output_chain.push(&mut tag_out_buf, 0);
 
         self.execute_cryptomaster_dma(&mut input_chain, &mut output_chain);
-
-        message.copy_from_slice(&ct_buf[..message.len()]);
 
         let mut tag = [0u8; TAG_LEN];
         tag.copy_from_slice(&tag_out_buf[..TAG_LEN]);
@@ -236,17 +248,18 @@ impl super::Nrf54l15Cal {
         let header_padded_len = (header_data_len + 15) & !15;
         let header_ign = header_padded_len - header_data_len;
 
+        // Ciphertext is streamed straight from the caller (no staging buffer); the padding up to the
+        // next 16-byte multiple is a separate ignored zero-pad descriptor.
         let ct_padded_len = (ciphertext.len() + 15) & !15;
         let ct_ign = ct_padded_len - ciphertext.len();
-        let mut ct_in_buf = [0u8; 256];
-        ct_in_buf[..ciphertext.len()].copy_from_slice(ciphertext);
+        // Sinks the plaintext of the ciphertext zero-padding (one output byte per input byte).
+        let mut pad_out = [0u8; 16];
 
         // Expected tag padded to 16 B; engine outputs XOR(computed_tag, expected_tag).
         // All-zero output means the tags match.
         let mut tag_in_buf = [0u8; 16];
         tag_in_buf[..TAG_LEN].copy_from_slice(&tag_in[..TAG_LEN]);
 
-        let mut pt_buf = [0u8; 256];
         let mut xor_tag_buf = [0u8; 16];
         let mut header_out_buf = [0u8; 288];
 
@@ -266,23 +279,35 @@ impl super::Nrf54l15Cal {
             &header_pad[..header_ign],
         );
         if !ciphertext.is_empty() {
-            input_chain.push(
-                &ct_in_buf[..ct_padded_len],
-                DMATAG_AES_DATA | dmatag_ign(ct_ign),
-            );
+            if ct_ign == 0 {
+                input_chain.push(ciphertext, DMATAG_AES_DATA);
+            } else {
+                input_chain.push_raw(ciphertext, DMATAG_AES_DATA);
+                input_chain.push(&header_pad[..ct_ign], DMATAG_AES_DATA | dmatag_ign(ct_ign));
+            }
         }
         input_chain.push(&tag_in_buf, DMATAG_AES_DATA | dmatag_ign(16 - TAG_LEN));
         output_chain.push(&mut header_out_buf[..header_padded_len], 0);
         if !ciphertext.is_empty() {
-            output_chain.push(&mut pt_buf[..ct_padded_len], 0);
+            // SAFETY: input_chain holds &ciphertext immutably; ct_ptr
+            // lets the output chain write to the same region in-place.
+            // BA411E serialises the read and write passes.
+            let ct_ptr = ciphertext.as_ptr() as *mut u8;
+            if ct_ign == 0 {
+                unsafe { output_chain.push_ptr(ct_ptr, ciphertext.len(), 0) };
+            } else {
+                unsafe { output_chain.push_ptr_raw(ct_ptr, ciphertext.len(), 0) };
+                output_chain.push(&mut pad_out[..ct_ign], 0);
+            }
         }
         output_chain.push(&mut xor_tag_buf, 0);
 
         self.execute_cryptomaster_dma(&mut input_chain, &mut output_chain);
 
         let mac_ok = xor_tag_buf[..TAG_LEN].iter().all(|&b| b == 0);
-        if mac_ok {
-            ciphertext.copy_from_slice(&pt_buf[..ciphertext.len()]);
+        // On authentication failure it must not be released, so zeroize it.
+        if !mac_ok {
+            ciphertext.zeroize();
         }
         mac_ok
     }
