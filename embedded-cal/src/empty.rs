@@ -159,7 +159,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         &mut self,
         alg: Self::Algorithm,
         _secret: &[u8],
-    ) -> Result<Self::VisibleSecretKey, dh::ImportError> {
+    ) -> Result<Self::VisibleSecretKey, crate::ImportError> {
         match alg {}
     }
 
@@ -175,7 +175,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         &mut self,
         alg: Self::Algorithm,
         _data: &[u8],
-    ) -> Result<Self::PublicKey, dh::ImportError> {
+    ) -> Result<Self::PublicKey, crate::ImportError> {
         match alg {}
     }
 }

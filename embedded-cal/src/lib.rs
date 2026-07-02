@@ -8,6 +8,7 @@ pub mod util;
 
 mod aead;
 mod dh;
+mod error;
 mod hash;
 mod hkdf;
 mod hmac;
@@ -20,9 +21,9 @@ pub use aead::{
     test_aead_algorithm_aesccm_16_64_128,
 };
 pub use dh::{
-    DhAlgorithm, DhProvider, ImportError, IncompatibleKeys, test_dh_algorithm_ecdh_p256,
-    test_dh_selftest,
+    DhAlgorithm, DhProvider, IncompatibleKeys, test_dh_algorithm_ecdh_p256, test_dh_selftest,
 };
+pub use error::ImportError;
 pub use hash::{HashAlgorithm, HashProvider, test_hash_algorithm_sha256};
 pub use hkdf::{HkdfError, HkdfProvider};
 pub use hmac::{HmacAlgorithm, HmacProvider, test_hmac_algorithm_hmacsha256};
