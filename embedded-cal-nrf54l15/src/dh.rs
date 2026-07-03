@@ -4,6 +4,7 @@
 use embedded_cal::p256::{
     P256_GX_BYTES, P256_GY_BYTES, P256_ORDER, bytes_to_words, ge, p256_recover_y,
 };
+use embedded_cal::plumbing::ec::{Ec, EcPrimitives};
 use nrf_pac::common::{RW, Reg};
 use nrf_pac::cracencore::vals::{Selcurve, Swapbytes};
 use rand_core::Rng as _;
@@ -189,15 +190,12 @@ pub enum PublicKey {
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SharedSecret {
-    bytes: [u8; <super::Nrf54l15Cal as embedded_cal::plumbing::ec::Ec>::MAX_SCALAR_LENGTH],
+    bytes: [u8; <super::Nrf54l15Cal as Ec>::MAX_SCALAR_LENGTH],
     len: usize,
 }
 
 impl SharedSecret {
-    fn from_x_coordinate<
-        CAL: embedded_cal::plumbing::ec::EcPrimitives<C>,
-        C: crate::dh_plumbing::NrfCurve,
-    >(
+    fn from_x_coordinate<CAL: EcPrimitives<C>, C: crate::dh_plumbing::NrfCurve>(
         plumbing: &mut CAL,
         point: &CAL::Point,
     ) -> Self {
@@ -456,8 +454,6 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         &mut self,
         public: &'p Self::PublicKey,
     ) -> impl AsRef<[u8]> + use<'p> {
-        use embedded_cal::plumbing::ec::Ec;
-
         // In this module, we could also unconditionall return `point.x.as_ref().as_slice()` for
         // all 3 branches of a `match public`, and that'd be effectively a no-op.
         //
@@ -480,9 +476,6 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         alg: Self::Algorithm,
         data: &[u8],
     ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        use embedded_cal::plumbing::ec::Ec;
-        use embedded_cal::plumbing::ec::EcPrimitives;
-
         match alg {
             DhAlgorithm::EcdhP256 => {
                 let x: [u8; _] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
@@ -508,8 +501,6 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         private: &Self::SecretKey,
         public: &Self::PublicKey,
     ) -> Result<Self::SharedSecret, embedded_cal::IncompatibleKeys> {
-        use embedded_cal::plumbing::ec::{Ec, EcPrimitives};
-
         match (private, public) {
             (SecretKey::EcdhP256(private), PublicKey::EcdhP256(public)) => {
                 let result = self.p256().multiply_scalar_point(private, public);
