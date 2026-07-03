@@ -206,6 +206,8 @@ impl plumbing::hash::Sha2Short for EmptyCal<true> {
 }
 
 impl plumbing::ec::Ec for EmptyCal<true> {
+    const MAX_SCALAR_LENGTH: usize = 0;
+
     type PrimitivesP256 = Self;
     type PrimitivesX25519 = Self;
     type PrimitivesX448 = Self;

@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub trait Ec {
+    /// The longest slice length ever usable with scalar import / export from any of the
+    /// primitives.
+    const MAX_SCALAR_LENGTH: usize;
+
     type PrimitivesP256: EcPrimitives<P256>;
     type PrimitivesX25519: EcPrimitives<X25519>;
     type PrimitivesX448: EcPrimitives<X448>;

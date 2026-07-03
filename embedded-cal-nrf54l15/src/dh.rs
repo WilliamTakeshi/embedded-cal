@@ -189,7 +189,7 @@ pub enum PublicKey {
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SharedSecret {
-    bytes: [u8; crate::dh_plumbing::MAX_SCALAR],
+    bytes: [u8; <super::Nrf54l15Cal as embedded_cal::plumbing::ec::Ec>::MAX_SCALAR_LENGTH],
     len: usize,
 }
 

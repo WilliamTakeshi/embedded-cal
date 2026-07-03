@@ -5,6 +5,8 @@ use super::*;
 use embedded_cal::plumbing::ec::*;
 
 impl Ec for Stm32wba55Cal {
+    const MAX_SCALAR_LENGTH: usize = 32;
+
     type PrimitivesP256 = Self;
     fn p256(&mut self) -> &mut Self::PrimitivesP256 {
         self

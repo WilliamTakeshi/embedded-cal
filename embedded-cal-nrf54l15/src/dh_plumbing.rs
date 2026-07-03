@@ -90,6 +90,8 @@ use core::marker::PhantomData;
 use embedded_cal::plumbing::ec::*;
 
 impl Ec for Nrf54l15Cal {
+    const MAX_SCALAR_LENGTH: usize = 56;
+
     type PrimitivesP256 = Self;
     type PrimitivesX25519 = Self;
     type PrimitivesX448 = Self;
@@ -173,8 +175,6 @@ impl<C: NrfCurve> EcPrimitives<C> for Nrf54l15Cal {
     }
 }
 
-pub(crate) const MAX_SCALAR: usize = 56;
-
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct NrfScalar<C: ?Sized> {
     pub(crate) data: [u8; MAX_SCALAR],
@@ -185,13 +185,13 @@ pub struct NrfScalar<C: ?Sized> {
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct NrfPoint<C: ?Sized> {
     // This doubles as the `u` coordinate for RFC7748 curves.
-    pub(crate) x: NrfScalar<C>,
+    x: NrfScalar<C>,
     // This is not used in RFC7748 curves.
-    pub(crate) y: NrfScalar<C>,
+    y: NrfScalar<C>,
 }
 
 // FIXME: While const generics can't do that, let's macro over this rather than repeat all over
-const _: () = assert!(32 <= MAX_SCALAR);
+const _: () = assert!(32 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
 impl NrfScalar<P256> {
     pub(crate) const fn from_const(value: [u8; 32]) -> Self {
         let mut data = [0; _];
@@ -217,7 +217,7 @@ impl AsRef<[u8; 32]> for NrfScalar<P256> {
         self.data.first_chunk().expect("const asserted")
     }
 }
-const _: () = assert!(32 <= MAX_SCALAR);
+const _: () = assert!(32 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
 impl NrfScalar<X25519> {
     pub(crate) const fn from_const(value: [u8; 32]) -> Self {
         let mut data = [0; _];
@@ -243,7 +243,7 @@ impl AsRef<[u8; 32]> for NrfScalar<X25519> {
         self.data.first_chunk().expect("const asserted")
     }
 }
-const _: () = assert!(56 <= MAX_SCALAR);
+const _: () = assert!(56 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
 impl NrfScalar<X448> {
     pub(crate) const fn from_const(value: [u8; 56]) -> Self {
         let mut data = [0; _];
