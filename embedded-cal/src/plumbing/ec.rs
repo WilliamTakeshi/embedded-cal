@@ -31,6 +31,8 @@ pub trait Ec {
 /// amore thorough survey of applications; then, this trait's requirement might become that the
 /// implementation may silently perform or even require clamping of values.
 pub trait EcPrimitives<C: Curve> {
+    /// Indicates whether [`Self::multiply_scalar_point()`] is available (otherwise it will likely
+    /// panic).
     const HAS_MULTIPLY_SCALAR_POINT: bool;
 
     type Scalar;
@@ -45,6 +47,41 @@ pub trait EcPrimitives<C: Curve> {
     /// trait can only even reach this if it explicitly requires that those are identical).
     // Should we offer an "and give the X coordinate only" optimization?
     fn multiply_scalar_point(&mut self, a: &Self::Scalar, b: &Self::Point) -> Self::Point;
+
+    /// Loads byte data into a scalar from the curve's native format.
+    ///
+    /// # Notes
+    ///
+    /// This is a slice because we can't have associated constants influence array lengths yet.
+    ///
+    /// We can't pull in an associated constant to make it take an array (and depending on the
+    /// invariants needed for the curves beyond clamping, it would then still be a faillible
+    /// operation).
+    ///
+    /// One option for getting earlier errors would be to take a reference to a length-generic
+    /// array and const-assert on the lengths (causing not a type but at least a conditional
+    /// compilation error), but that will need some testing w/rt ergonomics.
+    fn import_scalar_bytes(&mut self, scalar: &[u8]) -> Result<Self::Scalar, crate::ImportError>;
+
+    fn point(&mut self, x: Self::Scalar, y: Self::Scalar) -> Self::Point;
+
+    /// Inverse function of [`Self::import_scalar_bytes()`].
+    ///
+    /// # Notes
+    ///
+    /// Can we alter this to not depend on C? And if so, does that rule out any optimizations?
+    fn export_scalar_bytes<'s>(
+        &mut self,
+        scalar: &'s Self::Scalar,
+    ) -> impl AsRef<[u8]> + use<'s, C, Self>;
+
+    /// Accesses the first coordinate of a point.
+    fn x_coord(&mut self, point: &Self::Point) -> Self::Scalar;
+    /// Accesses the second coordinate of a point.
+    ///
+    /// This may (preferably const) panic for curves where that makes no sense (because all
+    /// operations run on X coordinates only).
+    fn y_coord(&mut self, point: &Self::Point) -> Self::Scalar;
 }
 
 /// Type-value trait to parametrize [`EcPrimitives`] over.

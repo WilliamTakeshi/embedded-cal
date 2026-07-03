@@ -232,6 +232,31 @@ impl<C: plumbing::ec::Curve> plumbing::ec::EcPrimitives<C> for EmptyCal<true> {
     fn multiply_scalar_point(&mut self, a: &Self::Scalar, _b: &Self::Point) -> Self::Point {
         match *a {}
     }
+
+    fn point(&mut self, x: Self::Scalar, _y: Self::Scalar) -> Self::Point {
+        match x {}
+    }
+
+    fn import_scalar_bytes(&mut self, _scalar: &[u8]) -> Result<Self::Scalar, crate::ImportError> {
+        Err(crate::ImportError)
+    }
+
+    fn export_scalar_bytes<'s>(
+        &mut self,
+        _scalar: &'s Self::Scalar,
+    ) -> impl AsRef<[u8]> + use<'s, C> {
+        // Actually never returns because it can not be entered due to *scalar being uninhabited,
+        // but we'll have to give a type nonetheless.
+        &[]
+    }
+
+    fn x_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        match *point {}
+    }
+
+    fn y_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        match *point {}
+    }
 }
 
 /// Type which an implementation of [`Cal`] can use when it implements no algorithm for a

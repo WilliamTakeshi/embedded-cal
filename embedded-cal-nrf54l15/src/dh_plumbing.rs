@@ -173,11 +173,51 @@ impl<C: NrfCurve> EcPrimitives<C> for Nrf54l15Cal {
     fn multiply_scalar_point(&mut self, a: &Self::Scalar, b: &Self::Point) -> Self::Point {
         C::multiply_scalar_point(self, a, b)
     }
+
+    fn point(&mut self, x: Self::Scalar, y: Self::Scalar) -> Self::Point {
+        NrfPoint { x, y }
+    }
+
+    fn import_scalar_bytes(
+        &mut self,
+        scalar: &[u8],
+    ) -> Result<Self::Scalar, embedded_cal::ImportError> {
+        if scalar.len() != C::SCALAR_SIZE {
+            return Err(embedded_cal::ImportError);
+        }
+        let mut data = [0; _];
+        data[..scalar.len()].copy_from_slice(scalar);
+        Ok(NrfScalar {
+            data,
+            phantom: PhantomData,
+        })
+    }
+
+    fn export_scalar_bytes<'s>(
+        &mut self,
+        scalar: &'s Self::Scalar,
+    ) -> impl AsRef<[u8]> + use<'s, C> {
+        &scalar.data[..C::SCALAR_SIZE]
+    }
+
+    fn x_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        NrfScalar {
+            data: point.x.data,
+            phantom: point.x.phantom,
+        }
+    }
+
+    fn y_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        NrfScalar {
+            data: point.y.data,
+            phantom: point.y.phantom,
+        }
+    }
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct NrfScalar<C: ?Sized> {
-    pub(crate) data: [u8; MAX_SCALAR],
+    data: [u8; Nrf54l15Cal::MAX_SCALAR_LENGTH],
     #[zeroize(skip)]
     phantom: PhantomData<C>,
 }
@@ -192,19 +232,14 @@ pub struct NrfPoint<C: ?Sized> {
 
 // FIXME: While const generics can't do that, let's macro over this rather than repeat all over
 const _: () = assert!(32 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
-impl NrfScalar<P256> {
-    pub(crate) const fn from_const(value: [u8; 32]) -> Self {
+impl From<[u8; 32]> for NrfScalar<P256> {
+    fn from(value: [u8; 32]) -> Self {
         let mut data = [0; _];
         *data.first_chunk_mut().expect("const asserted") = value;
         NrfScalar {
             data,
             phantom: PhantomData,
         }
-    }
-}
-impl From<[u8; 32]> for NrfScalar<P256> {
-    fn from(value: [u8; 32]) -> Self {
-        Self::from_const(value)
     }
 }
 impl<'a> From<&'a NrfScalar<P256>> for [u8; 32] {
@@ -218,19 +253,14 @@ impl AsRef<[u8; 32]> for NrfScalar<P256> {
     }
 }
 const _: () = assert!(32 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
-impl NrfScalar<X25519> {
-    pub(crate) const fn from_const(value: [u8; 32]) -> Self {
+impl From<[u8; 32]> for NrfScalar<X25519> {
+    fn from(value: [u8; 32]) -> Self {
         let mut data = [0; _];
         *data.first_chunk_mut().expect("const asserted") = value;
         NrfScalar {
             data,
             phantom: PhantomData,
         }
-    }
-}
-impl From<[u8; 32]> for NrfScalar<X25519> {
-    fn from(value: [u8; 32]) -> Self {
-        Self::from_const(value)
     }
 }
 impl<'a> From<&'a NrfScalar<X25519>> for [u8; 32] {
@@ -244,19 +274,14 @@ impl AsRef<[u8; 32]> for NrfScalar<X25519> {
     }
 }
 const _: () = assert!(56 <= Nrf54l15Cal::MAX_SCALAR_LENGTH);
-impl NrfScalar<X448> {
-    pub(crate) const fn from_const(value: [u8; 56]) -> Self {
+impl From<[u8; 56]> for NrfScalar<X448> {
+    fn from(value: [u8; 56]) -> Self {
         let mut data = [0; _];
         *data.first_chunk_mut().expect("const asserted") = value;
         NrfScalar {
             data,
             phantom: PhantomData,
         }
-    }
-}
-impl From<[u8; 56]> for NrfScalar<X448> {
-    fn from(value: [u8; 56]) -> Self {
-        Self::from_const(value)
     }
 }
 impl<'a> From<&'a NrfScalar<X448>> for [u8; 56] {

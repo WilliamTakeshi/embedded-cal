@@ -194,13 +194,33 @@ pub struct SharedSecret {
 }
 
 impl SharedSecret {
-    fn from_x_coordinate<C: crate::dh_plumbing::NrfCurve>(
-        point: crate::dh_plumbing::NrfPoint<C>,
+    fn from_x_coordinate<
+        CAL: embedded_cal::plumbing::ec::EcPrimitives<C>,
+        C: crate::dh_plumbing::NrfCurve,
+    >(
+        plumbing: &mut CAL,
+        point: &CAL::Point,
     ) -> Self {
+        // In this module we could, as an optimization, reach right for point.x.data, but moving towards a
+        // more reusable higher-layer, we accept the copying/zeroing.
+        //
+        // FIXME: How can we retain such optimizations going to a generic software layer?
+        let x = plumbing.x_coord(point);
+        let x = plumbing.export_scalar_bytes(&x);
+        let mut bytes = [0; _];
+        bytes[..C::SCALAR_SIZE].copy_from_slice(x.as_ref());
         SharedSecret {
-            bytes: point.x.data,
+            bytes,
             len: C::SCALAR_SIZE,
         }
+    }
+}
+
+// Not needed per se, but useful because we can thus internally reuse it as the return type of
+// export_publickey_bytes.
+impl AsRef<[u8]> for SharedSecret {
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes[..self.len]
     }
 }
 
@@ -436,10 +456,22 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         &mut self,
         public: &'p Self::PublicKey,
     ) -> impl AsRef<[u8]> + use<'p> {
+        use embedded_cal::plumbing::ec::Ec;
+
+        // In this module, we could also unconditionall return `point.x.as_ref().as_slice()` for
+        // all 3 branches of a `match public`, and that'd be effectively a no-op.
+        //
+        // FIXME: How can we retain such optimizations going to a generic software layer? Can (or
+        // should) the software layer demand that the AsRef type is the same across all C? (Then it
+        // could be `self.p256().export_scalar_bytes(&self.p256().x_coord(point))`)
+
+        // As a code-reusing solution to at least not work around that limitation twice, we're
+        // reusing SharedSecret internally.
+
         match public {
-            PublicKey::EcdhP256(point) => point.x.as_ref().as_slice(),
-            PublicKey::X25519(point) => point.x.as_ref().as_slice(),
-            PublicKey::X448(point) => point.x.as_ref().as_slice(),
+            PublicKey::EcdhP256(point) => SharedSecret::from_x_coordinate(self.p256(), point),
+            PublicKey::X25519(point) => SharedSecret::from_x_coordinate(self.x25519(), point),
+            PublicKey::X448(point) => SharedSecret::from_x_coordinate(self.x448(), point),
         }
     }
 
@@ -448,31 +480,25 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         alg: Self::Algorithm,
         data: &[u8],
     ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        use crate::dh_plumbing::NrfPoint;
+        use embedded_cal::plumbing::ec::Ec;
+        use embedded_cal::plumbing::ec::EcPrimitives;
 
         match alg {
             DhAlgorithm::EcdhP256 => {
                 let x: [u8; _] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
                 let y = p256_recover_y(&x)?;
-                Ok(PublicKey::EcdhP256(NrfPoint {
-                    x: x.into(),
-                    y: y.into(),
-                }))
+                Ok(PublicKey::EcdhP256(self.p256().point(x.into(), y.into())))
             }
             DhAlgorithm::X25519 => {
                 let mut x: [u8; _] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
                 x[31] &= 0x7F;
-                Ok(PublicKey::X25519(NrfPoint {
-                    x: x.into(),
-                    y: [0; _].into(),
-                }))
+                Ok(PublicKey::X25519(
+                    self.x25519().point(x.into(), [0; _].into()),
+                ))
             }
             DhAlgorithm::X448 => {
                 let x: [u8; _] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
-                Ok(PublicKey::X448(NrfPoint {
-                    x: x.into(),
-                    y: [0; _].into(),
-                }))
+                Ok(PublicKey::X448(self.x448().point(x.into(), [0; _].into())))
             }
         }
     }
@@ -487,42 +513,39 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         match (private, public) {
             (SecretKey::EcdhP256(private), PublicKey::EcdhP256(public)) => {
                 let result = self.p256().multiply_scalar_point(private, public);
-                Ok(SharedSecret::from_x_coordinate(result))
+                Ok(SharedSecret::from_x_coordinate(self.p256(), &result))
             }
             (SecretKey::X25519(k), PublicKey::X25519(public)) => {
                 // Not clamping of k: Was done at generation / loading time.
                 // No clearing of the 256 bit of the public key: Was done at loading time.
                 let result = self.x25519().multiply_scalar_point(k, public);
-                Ok(SharedSecret::from_x_coordinate(result))
+                Ok(SharedSecret::from_x_coordinate(self.x25519(), &result))
             }
             (SecretKey::X448(k), PublicKey::X448(public)) => {
                 // Not clamping of k: Was done at generation / loading time.
                 let result = self.x448().multiply_scalar_point(k, public);
-                Ok(SharedSecret::from_x_coordinate(result))
+                Ok(SharedSecret::from_x_coordinate(self.x448(), &result))
             }
             _ => Err(embedded_cal::IncompatibleKeys),
         }
     }
 
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
-        use crate::dh_plumbing::{NrfPoint, NrfScalar};
+        use crate::dh_plumbing::NrfScalar;
         use embedded_cal::plumbing::ec::*;
 
         match private {
             SecretKey::EcdhP256(scalar) => {
-                const P256_G: NrfPoint<P256> = NrfPoint {
-                    x: NrfScalar::<P256>::from_const(P256_GX_BYTES),
-                    y: NrfScalar::<P256>::from_const(P256_GY_BYTES),
-                };
-                PublicKey::EcdhP256(self.p256().multiply_scalar_point(scalar, &P256_G))
+                let base = self.p256().point(
+                    NrfScalar::<P256>::from(P256_GX_BYTES),
+                    NrfScalar::<P256>::from(P256_GY_BYTES),
+                );
+                PublicKey::EcdhP256(self.p256().multiply_scalar_point(scalar, &base))
             }
             SecretKey::X25519(k) => {
                 let mut base_u = [0u8; 32];
                 base_u[0] = 9; // X25519 base point u-coordinate = 9 (little-endian)
-                let base = NrfPoint {
-                    x: base_u.into(),
-                    y: [0; _].into(),
-                };
+                let base = self.x25519().point(base_u.into(), [0; _].into());
                 let public = self.x25519().multiply_scalar_point(k, &base);
                 // FIXME: Verify that the output key needs no bit-clearing (because it is on the
                 // curve by construction)
@@ -531,10 +554,7 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
             SecretKey::X448(k) => {
                 let mut base_u = [0u8; 56];
                 base_u[0] = 5; // X448 base point u-coordinate = 5 (little-endian)
-                let base = NrfPoint {
-                    x: base_u.into(),
-                    y: [0; _].into(),
-                };
+                let base = self.x448().point(base_u.into(), [0; _].into());
                 PublicKey::X448(self.x448().multiply_scalar_point(k, &base))
             }
         }
@@ -544,6 +564,6 @@ impl embedded_cal::DhProvider for super::Nrf54l15Cal {
         &mut self,
         secret: &'s Self::SharedSecret,
     ) -> impl AsRef<[u8]> + use<'s> {
-        &secret.bytes[..secret.len]
+        secret.as_ref()
     }
 }
