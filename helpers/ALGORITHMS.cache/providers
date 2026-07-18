@@ -10,10 +10,10 @@
 ./embedded-cal-stm32wba55/src/aead.rs:impl embedded_cal::AeadProvider for super::Stm32wba55Cal {
 ./embedded-cal-stm32wba55/src/dh.rs:impl embedded_cal::DhProvider for super::Stm32wba55Cal {
 ./embedded-cal-stm32wba55/src/lib.rs:impl embedded_cal::HmacProvider for Stm32wba55Cal {
-./embedded-cal/src/empty.rs:impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
-./embedded-cal/src/empty.rs:impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
-./embedded-cal/src/empty.rs:impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
-./embedded-cal/src/empty.rs:impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+./embedded-cal/src/empty.rs:impl HashProvider for EmptyCal {
+./embedded-cal/src/empty.rs:impl HmacProvider for EmptyCal {
+./embedded-cal/src/empty.rs:impl AeadProvider for EmptyCal {
+./embedded-cal/src/empty.rs:impl DhProvider for EmptyCal {
 ./embedded-cal/src/hkdf.rs:impl<H: HmacProvider> HkdfProvider for H {
 ./testvectors/src/aead.rs:pub fn test_aead_aesccm_16_64_128(cal: &mut impl embedded_cal::AeadProvider) {
 ./testvectors/src/aead.rs:pub fn test_aead_aesccm_16_64_256(cal: &mut impl embedded_cal::AeadProvider) {

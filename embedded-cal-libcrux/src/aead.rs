@@ -279,7 +279,7 @@ mod tests {
     struct TestConfig;
 
     impl ExtenderConfig for TestConfig {
-        type Base = embedded_cal::empty::EmptyCal<true>;
+        type Base = embedded_cal::empty::EmptyCal;
     }
 
     #[test]

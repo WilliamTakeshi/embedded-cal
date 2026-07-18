@@ -9,7 +9,7 @@ mod rng;
 use digest::Digest;
 use embedded_cal::{accessor::*, empty};
 
-pub type RustcryptoCal = RustcryptoCalExtender<empty::EmptyCal<false>>;
+pub type RustcryptoCal = RustcryptoCalExtender<empty::EmptyCal>;
 
 pub struct RustcryptoCalExtender<Base> {
     #[cfg(not(feature = "alloc"))]

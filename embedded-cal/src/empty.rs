@@ -13,9 +13,9 @@ use super::*;
 /// It implements all the individual traits, as well as the full `Cal` trait. The former is useful
 /// for hardware implementations that don't touch an area at all; the latter is useful in testing
 /// or when an extender is used standalone.
-pub struct EmptyCal<const PLUMBING: bool>;
+pub struct EmptyCal;
 
-impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
+impl Cal for EmptyCal {
     type DhProvider = Self;
     type AeadProvider = Self;
     type HashProvider = Self;
@@ -42,7 +42,7 @@ impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
 // resolved; then again, the implementations that do make it short will live here. Until then, feel
 // free to copy those out into your Cal implementations.
 
-impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
+impl HashProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type State = NoAlgorithms;
     type Output = NoAlgorithms;
@@ -60,7 +60,7 @@ impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
+impl HmacProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
     type State = NoAlgorithms;
@@ -83,7 +83,7 @@ impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
+impl AeadProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
     type Tag = NoAlgorithms;
@@ -114,7 +114,7 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+impl DhProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type VisibleSecretKey = NoAlgorithms;
     type SecretKey = NoAlgorithms;
@@ -141,7 +141,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn raw_secret_bytes<'s>(
         &mut self,
         secret: &'s Self::SharedSecret,
-    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'s> {
         match *secret {};
         &[]
     }
@@ -150,7 +150,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn export_secretkey_bytes<'s>(
         &mut self,
         secretkey: &'s Self::VisibleSecretKey,
-    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'s> {
         match *secretkey {};
         &[]
     }
@@ -167,7 +167,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> impl AsRef<[u8]> + use<'p, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'p> {
         match *public {};
         &[]
     }
@@ -180,11 +180,11 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl plumbing::Plumbing for EmptyCal<true> {}
+impl plumbing::Plumbing for EmptyCal {}
 
-impl plumbing::hash::Hash for EmptyCal<true> {}
+impl plumbing::hash::Hash for EmptyCal {}
 
-impl plumbing::hash::Sha2Short for EmptyCal<true> {
+impl plumbing::hash::Sha2Short for EmptyCal {
     const SUPPORTED: bool = false;
     const SEND_PADDING: bool = false;
     const FIRST_CHUNK_SIZE: usize = 0;
@@ -205,7 +205,7 @@ impl plumbing::hash::Sha2Short for EmptyCal<true> {
     }
 }
 
-impl plumbing::ec::Ec for EmptyCal<true> {
+impl plumbing::ec::Ec for EmptyCal {
     const MAX_SCALAR_LENGTH: usize = 0;
 
     type PrimitivesP256 = Self;
@@ -223,7 +223,7 @@ impl plumbing::ec::Ec for EmptyCal<true> {
     }
 }
 
-impl<C: plumbing::ec::Curve> plumbing::ec::EcPrimitives<C> for EmptyCal<true> {
+impl<C: plumbing::ec::Curve> plumbing::ec::EcPrimitives<C> for EmptyCal {
     const HAS_MULTIPLY_SCALAR_POINT: bool = false;
 
     type Scalar = NoAlgorithms;

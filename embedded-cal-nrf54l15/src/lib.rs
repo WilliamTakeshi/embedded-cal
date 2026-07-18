@@ -24,14 +24,14 @@ pub struct Nrf54l15Cal {
     cracen_core: cracencore::Cracencore,
 
     // Null-provider for everything we do *not* implement
-    empty: EmptyCal<false>,
+    empty: EmptyCal,
 }
 
 impl embedded_cal::Cal for Nrf54l15Cal {
     type DhProvider = Self;
     type AeadProvider = Self;
-    type HashProvider = EmptyCal<false>;
-    type HmacProvider = EmptyCal<false>;
+    type HashProvider = EmptyCal;
+    type HmacProvider = EmptyCal;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self

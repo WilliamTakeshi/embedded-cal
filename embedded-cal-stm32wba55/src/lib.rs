@@ -31,13 +31,13 @@ pub struct Stm32wba55Cal {
     pka: pka::Pka,
 
     // Null-provider for everything we do *not* implement
-    empty: EmptyCal<true>,
+    empty: EmptyCal,
 }
 
 impl embedded_cal::Cal for Stm32wba55Cal {
     type DhProvider = Self;
     type AeadProvider = Self;
-    type HashProvider = EmptyCal<true>;
+    type HashProvider = EmptyCal;
     type HmacProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
