@@ -32,6 +32,12 @@ or implementations of [SUIT](https://datatracker.ietf.org/doc/draft-ietf-suit-ma
 The project is currently being launched,
 and expected to become usable before the end of 2025.
 
+## MSRV
+
+These crates currently have no MSRV; they target latest stable Rust at the time of writing.
+
+Examples can use unstable features if it needed.
+
 ## Publications
 
 `embedded-cal` was introduced in:
