@@ -63,6 +63,20 @@ pub trait EcPrimitives<C: Curve> {
     /// compilation error), but that will need some testing w/rt ergonomics.
     fn import_scalar_bytes(&mut self, scalar: &[u8]) -> Result<Self::Scalar, crate::ImportError>;
 
+    /// Constructs a point from two scalars.
+    ///
+    /// # Requirements and panics
+    ///
+    /// It is the caller's responsibility to pass in coordinates that are on the curve. The
+    /// implementation may perform an extra check, and may panic if that constraint is violated.
+    ///
+    /// # Open issues (FIXME)
+    ///
+    /// When all relevant operations happen only on the X coordinate (i.e., on X25519/X448),
+    /// implementations currently ignore the `y` coordinate. This will be addressed when later
+    /// there is the implementation experience with ECDSA using the backend. (Potential resolutions
+    /// include making that coordinate optional, making a type-level distinction for a
+    /// `YScalar`, or having a dedicated plumbing back-end for OKP keys).
     fn point(&mut self, x: Self::Scalar, y: Self::Scalar) -> Self::Point;
 
     /// Inverse function of [`Self::import_scalar_bytes()`].
