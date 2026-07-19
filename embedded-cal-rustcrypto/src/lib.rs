@@ -78,6 +78,39 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     }
 }
 
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::hash::Sha2Short>
+    embedded_cal::plumbing::hash::Sha2Short for RustcryptoCalExtender<Base>
+{
+    const SUPPORTED: bool = Base::SUPPORTED;
+    const SEND_PADDING: bool = Base::SEND_PADDING;
+    const FIRST_CHUNK_SIZE: usize = Base::FIRST_CHUNK_SIZE;
+    const UPDATE_MULTICHUNK: bool = Base::UPDATE_MULTICHUNK;
+
+    type State = Base::State;
+
+    fn init(&mut self, variant: embedded_cal::plumbing::hash::Sha2ShortVariant) -> Self::State {
+        self.base.init(variant)
+    }
+
+    fn update(&mut self, instance: &mut Self::State, data: &[u8]) {
+        self.base.update(instance, data)
+    }
+
+    fn finalize(&mut self, instance: Self::State, last_chunk: &[u8], target: &mut [u8]) {
+        self.base.finalize(instance, last_chunk, target)
+    }
+}
+
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::hash::Hash>
+    embedded_cal::plumbing::hash::Hash for RustcryptoCalExtender<Base>
+{
+}
+
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::Plumbing> embedded_cal::plumbing::Plumbing
+    for RustcryptoCalExtender<Base>
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +160,13 @@ mod tests {
         let mut cal = RustcryptoCal::new();
 
         testvectors::test_aead_aesccm_16_64_256(&mut cal);
+    }
+
+    #[test]
+    fn test_plumbing_passon() {
+        fn f(_cal: impl embedded_cal::plumbing::Plumbing) {}
+        f(RustcryptoCalExtender::new_extending(
+            embedded_cal::empty::EmptyCal::<true>,
+        ))
     }
 }
