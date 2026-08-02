@@ -10,4 +10,4 @@ pub mod sign;
 /// provides, all these traits have a `const SUPPORTED: bool`: If this is false (which will be
 /// default once the `associated_type_defaults` feature lands), all other values are ignored, and
 /// all functions can use the provided panicking implementations.
-pub trait Plumbing: hash::Hash {}
+pub trait Plumbing: hash::Hash + sign::EcdsaP256 {}

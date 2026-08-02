@@ -180,9 +180,161 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     }
 }
 
+impl<const PLUMBING: bool> SignProvider for EmptyCal<PLUMBING> {
+    type Algorithm = NoAlgorithms;
+    type VisibleSecretKey = NoAlgorithms;
+    type SecretKey = NoAlgorithms;
+    type PublicKey = NoAlgorithms;
+    type Signature = NoAlgorithms;
+
+    fn generate_visible(&mut self, alg: Self::Algorithm) -> Self::VisibleSecretKey {
+        match alg {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+        match *secretkey {};
+        &[]
+    }
+
+    fn import_secretkey_bytes(
+        &mut self,
+        alg: Self::Algorithm,
+        _secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, ImportError> {
+        match alg {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_bytes<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> impl AsRef<[u8]> + use<'p, PLUMBING> {
+        match *public {};
+        &[]
+    }
+
+    fn import_publickey_bytes(
+        &mut self,
+        alg: Self::Algorithm,
+        _data: &[u8],
+    ) -> Result<Self::PublicKey, ImportError> {
+        match alg {}
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+
+    fn sign(&mut self, private: &Self::SecretKey, _message: &[u8]) -> Self::Signature {
+        match *private {}
+    }
+
+    fn verify(
+        &mut self,
+        public: &Self::PublicKey,
+        _message: &[u8],
+        _signature: &Self::Signature,
+    ) -> Result<(), SignatureInvalid> {
+        match *public {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_signature_bytes<'s>(
+        &mut self,
+        signature: &'s Self::Signature,
+    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+        match *signature {};
+        &[]
+    }
+
+    fn import_signature_bytes(
+        &mut self,
+        alg: Self::Algorithm,
+        _data: &[u8],
+    ) -> Result<Self::Signature, ImportError> {
+        match alg {}
+    }
+}
+
 impl plumbing::Plumbing for EmptyCal<true> {}
 
 impl plumbing::hash::Hash for EmptyCal<true> {}
+
+impl plumbing::sign::EcdsaP256 for EmptyCal<true> {
+    const SUPPORTED: bool = false;
+
+    type VisibleSecretKey = NoAlgorithms;
+    type SecretKey = NoAlgorithms;
+    type PublicKey = NoAlgorithms;
+    type Signature = NoAlgorithms;
+
+    fn generate_visible(&mut self) -> Self::VisibleSecretKey {
+        panic!("user disregarded SUPPORTED=false")
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s> {
+        match *secretkey {};
+        &[]
+    }
+
+    fn import_secretkey_bytes(
+        &mut self,
+        _secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, ImportError> {
+        panic!("user disregarded SUPPORTED=false")
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_publickey_bytes<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> impl AsRef<[u8]> + use<'p> {
+        match *public {};
+        &[]
+    }
+
+    fn import_publickey_bytes(&mut self, _data: &[u8]) -> Result<Self::PublicKey, ImportError> {
+        panic!("user disregarded SUPPORTED=false")
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        match *private {}
+    }
+
+    fn sign_digest(&mut self, private: &Self::SecretKey, _digest: &[u8; 32]) -> Self::Signature {
+        match *private {}
+    }
+
+    fn verify_digest(
+        &mut self,
+        public: &Self::PublicKey,
+        _digest: &[u8; 32],
+        _signature: &Self::Signature,
+    ) -> Result<(), SignatureInvalid> {
+        match *public {}
+    }
+
+    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
+    fn export_signature_bytes<'s>(
+        &mut self,
+        signature: &'s Self::Signature,
+    ) -> impl AsRef<[u8]> + use<'s> {
+        match *signature {};
+        &[]
+    }
+
+    fn import_signature_bytes(&mut self, _data: &[u8]) -> Result<Self::Signature, ImportError> {
+        panic!("user disregarded SUPPORTED=false")
+    }
+}
 
 impl plumbing::hash::Sha2Short for EmptyCal<true> {
     const SUPPORTED: bool = false;
@@ -251,6 +403,12 @@ impl AsRef<[u8]> for NoAlgorithms {
 
 impl DhAlgorithm for NoAlgorithms {
     fn output_length(&self) -> usize {
+        match *self {}
+    }
+}
+
+impl SignAlgorithm for NoAlgorithms {
+    fn signature_length(&self) -> usize {
         match *self {}
     }
 }
