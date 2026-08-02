@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
 pub mod hash;
+pub mod sign;
 
 /// Sum of all traits that a hardware accelerator can provide.
 ///
