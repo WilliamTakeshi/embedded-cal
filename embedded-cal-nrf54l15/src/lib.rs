@@ -31,6 +31,9 @@ impl embedded_cal::Cal for Nrf54l15Cal {
     type AeadProvider = Self;
     type HashProvider = EmptyCal<false>;
     type HmacProvider = EmptyCal<false>;
+    // The board's CRACEN scalar-mult can back ECDSA, but only once composed with a
+    // HashProvider (see embedded-cal-software-demo::Extender); bare Nrf54l15Cal has none.
+    type SignProvider = EmptyCal<false>;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -41,6 +44,10 @@ impl embedded_cal::Cal for Nrf54l15Cal {
     }
 
     fn hash(&mut self) -> &mut Self::HashProvider {
+        &mut self.empty
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
         &mut self.empty
     }
 

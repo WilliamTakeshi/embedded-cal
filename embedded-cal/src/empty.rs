@@ -20,6 +20,7 @@ impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = Self;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -34,6 +35,10 @@ impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
     }
 
     fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
         self
     }
 }

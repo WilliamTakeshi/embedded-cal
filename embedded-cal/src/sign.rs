@@ -133,3 +133,37 @@ pub fn test_sign_algorithm_ecdsa_p256<SP: SignProvider>() {
     );
     assert_eq!(es256.signature_length(), 64);
 }
+
+/// Generates a keypair, signs a message, verifies the signature, and asserts that verification
+/// rejects both a corrupted message and an unrelated public key.
+///
+/// As signing typically uses a random per-signature nonce, this cannot check `sign()`'s output
+/// against a known answer; combine with known-answer verify vectors (checking `verify()`
+/// independently) for full coverage.
+pub fn test_sign_selftest<C: crate::Cal + rand_core::CryptoRng>(
+    cal: &mut C,
+    alg: <C::SignProvider as SignProvider>::Algorithm,
+) {
+    let cal = cal.sign();
+
+    let secret = cal.generate(alg.clone());
+    let public = cal.public_key(&secret);
+
+    let message = b"embedded-cal ECDSA selftest message";
+    let signature = cal.sign(&secret, message);
+    cal.verify(&public, message, &signature)
+        .expect("a freshly created signature must verify");
+
+    assert!(
+        cal.verify(&public, b"a different message", &signature)
+            .is_err(),
+        "verification must reject a signature over a different message"
+    );
+
+    let other_secret = cal.generate(alg);
+    let other_public = cal.public_key(&other_secret);
+    assert!(
+        cal.verify(&other_public, message, &signature).is_err(),
+        "verification must reject a signature checked against an unrelated public key"
+    );
+}

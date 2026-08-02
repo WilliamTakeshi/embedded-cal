@@ -63,6 +63,8 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = HmacProviderOf<Base>;
+    // TODO: implement SignProvider directly (P-256 via p256::ecdsa) instead of forwarding.
+    type SignProvider = SignProviderOf<Base>;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -75,6 +77,9 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     }
     fn hmac(&mut self) -> &mut Self::HmacProvider {
         self.base.hmac()
+    }
+    fn sign(&mut self) -> &mut Self::SignProvider {
+        self.base.sign()
     }
 }
 
