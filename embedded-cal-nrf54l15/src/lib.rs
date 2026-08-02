@@ -6,10 +6,11 @@ mod aead;
 mod descriptor;
 mod dh;
 mod microcode;
+mod sign;
 mod try_rng;
 
 use descriptor::{DescriptorChain, Input, Output};
-use embedded_cal::empty::{EmptyCal, NoAlgorithms};
+use embedded_cal::empty::EmptyCal;
 use nrf_pac::{cracen, cracencore};
 
 // CCM encrypt needs 4 input descriptors (config, key, header+aad, plaintext) and
@@ -126,86 +127,6 @@ impl AsRef<[u8]> for HashResult {
 impl embedded_cal::plumbing::Plumbing for Nrf54l15Cal {}
 
 impl embedded_cal::plumbing::hash::Hash for Nrf54l15Cal {}
-
-// Placeholder until CRACEN-backed ECDSA lands; SUPPORTED=false stub, same shape as
-// EmptyCal<true>'s.
-impl embedded_cal::plumbing::sign::EcdsaP256 for Nrf54l15Cal {
-    const SUPPORTED: bool = false;
-
-    type VisibleSecretKey = NoAlgorithms;
-    type SecretKey = NoAlgorithms;
-    type PublicKey = NoAlgorithms;
-    type Signature = NoAlgorithms;
-
-    fn generate_visible(&mut self) -> Self::VisibleSecretKey {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_secretkey_bytes<'s>(
-        &mut self,
-        secretkey: &'s Self::VisibleSecretKey,
-    ) -> impl AsRef<[u8]> + use<'s> {
-        match *secretkey {};
-        &[]
-    }
-
-    fn import_secretkey_bytes(
-        &mut self,
-        _secret: &[u8],
-    ) -> Result<Self::VisibleSecretKey, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_bytes<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> impl AsRef<[u8]> + use<'p> {
-        match *public {};
-        &[]
-    }
-
-    fn import_publickey_bytes(
-        &mut self,
-        _data: &[u8],
-    ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
-        match *private {}
-    }
-
-    fn sign_digest(&mut self, private: &Self::SecretKey, _digest: &[u8; 32]) -> Self::Signature {
-        match *private {}
-    }
-
-    fn verify_digest(
-        &mut self,
-        public: &Self::PublicKey,
-        _digest: &[u8; 32],
-        _signature: &Self::Signature,
-    ) -> Result<(), embedded_cal::SignatureInvalid> {
-        match *public {}
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_signature_bytes<'s>(
-        &mut self,
-        signature: &'s Self::Signature,
-    ) -> impl AsRef<[u8]> + use<'s> {
-        match *signature {};
-        &[]
-    }
-
-    fn import_signature_bytes(
-        &mut self,
-        _data: &[u8],
-    ) -> Result<Self::Signature, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-}
 
 impl embedded_cal::plumbing::hash::Sha2Short for Nrf54l15Cal {
     const SUPPORTED: bool = true;
