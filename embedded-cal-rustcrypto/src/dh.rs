@@ -229,7 +229,7 @@ pub enum SharedSecret<BSS> {
     Direct(BSS),
 }
 
-struct OldRng<'c, C: embedded_cal::Cal>(&'c mut C);
+pub(crate) struct OldRng<'c, C: embedded_cal::Cal>(pub(crate) &'c mut C);
 
 impl<'c, C: embedded_cal::Cal + rand_core::CryptoRng> rand_core_06::CryptoRng for OldRng<'c, C> {}
 impl<'c, C: embedded_cal::Cal + rand_core::CryptoRng> rand_core_06::RngCore for OldRng<'c, C> {

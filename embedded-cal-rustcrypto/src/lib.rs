@@ -5,6 +5,7 @@ mod aead;
 mod dh;
 mod hash;
 mod rng;
+mod sign;
 
 use digest::Digest;
 use embedded_cal::{accessor::*, empty};
@@ -63,8 +64,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = HmacProviderOf<Base>;
-    // TODO: implement SignProvider directly (P-256 via p256::ecdsa) instead of forwarding.
-    type SignProvider = SignProviderOf<Base>;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -79,7 +79,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
         self.base.hmac()
     }
     fn sign(&mut self) -> &mut Self::SignProvider {
-        self.base.sign()
+        self
     }
 }
 
@@ -173,5 +173,21 @@ mod tests {
         f(RustcryptoCalExtender::new_extending(
             embedded_cal::empty::EmptyCal::<true>,
         ))
+    }
+
+    #[test]
+    fn test_sign() {
+        use embedded_cal::SignAlgorithm;
+
+        let mut cal = RustcryptoCal::new();
+
+        embedded_cal::test_sign_algorithm_ecdsa_p256::<RustcryptoCal>();
+
+        let es256 = SignAlgorithm::from_cose_number(-7i8).unwrap();
+        embedded_cal::test_sign_selftest(&mut cal, es256);
+
+        for vec in testvectors::sign::ECDSA_P256 {
+            vec.test_with(&mut cal);
+        }
     }
 }
