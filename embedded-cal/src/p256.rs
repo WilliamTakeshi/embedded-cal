@@ -207,6 +207,133 @@ fn pow_mod(base: &[u32; 8], exp: &[u32; 8]) -> [u32; 8] {
     result
 }
 
+fn sub_mod(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+    if ge(a, b) {
+        sub256(a, b)
+    } else {
+        sub256(&P, &sub256(b, a))
+    }
+}
+
+/// Adds two scalars mod the P-256 curve order `n`.
+pub fn add_mod_n(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+    let mut r = [0u32; 8];
+    let mut carry: u64 = 0;
+    for i in 0..8 {
+        let s = a[i] as u64 + b[i] as u64 + carry;
+        r[i] = s as u32;
+        carry = s >> 32;
+    }
+    if carry > 0 || ge(&r, &P256_ORDER) {
+        sub256(&r, &P256_ORDER)
+    } else {
+        r
+    }
+}
+
+// Reduces a 512-bit value mod the P-256 curve order `n`, bit by bit (long division).
+//
+// `n` does not have `p`'s special form, so `reduce_p256`'s fast reduction does not apply here;
+// this is only called O(1) times per sign/verify, not in a hot loop.
+fn reduce_mod_n(t: &[u32; 16]) -> [u32; 8] {
+    let mut r = [0u32; 8];
+    for word in t.iter().rev() {
+        for bit in (0..32).rev() {
+            let overflow = r[7] >> 31;
+            for i in (1..8).rev() {
+                r[i] = (r[i] << 1) | (r[i - 1] >> 31);
+            }
+            r[0] = (r[0] << 1) | ((word >> bit) & 1);
+            if overflow != 0 || ge(&r, &P256_ORDER) {
+                r = sub256(&r, &P256_ORDER);
+            }
+        }
+    }
+    r
+}
+
+/// Multiplies two scalars mod the P-256 curve order `n`.
+pub fn mul_mod_n(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+    let mut t = [0u32; 16];
+    for i in 0..8 {
+        let mut carry: u64 = 0;
+        for j in 0..8 {
+            let cur = t[i + j] as u64 + a[i] as u64 * b[j] as u64 + carry;
+            t[i + j] = cur as u32;
+            carry = cur >> 32;
+        }
+        t[i + 8] = carry as u32;
+    }
+    reduce_mod_n(&t)
+}
+
+fn pow_mod_n(base: &[u32; 8], exp: &[u32; 8]) -> [u32; 8] {
+    let mut result = [0u32; 8];
+    result[0] = 1;
+    let mut base = *base;
+    for mut word in exp.iter().copied() {
+        for _ in 0..32 {
+            if word & 1 != 0 {
+                result = mul_mod_n(&result, &base);
+            }
+            base = mul_mod_n(&base, &base);
+            word >>= 1;
+        }
+    }
+    result
+}
+
+/// Computes the modular inverse of `a` mod the P-256 curve order `n`, via Fermat's little
+/// theorem (`n` is prime).
+pub fn inv_mod_n(a: &[u32; 8]) -> [u32; 8] {
+    let n_minus_2 = sub256(&P256_ORDER, &[2, 0, 0, 0, 0, 0, 0, 0]);
+    pow_mod_n(a, &n_minus_2)
+}
+
+/// Adds two P-256 points in affine coordinates.
+///
+/// Returns `None` if the result is the point at infinity (i.e. `p2 == -p1`); P-256 has prime
+/// order, so no valid curve point has `y == 0`, and the caller-visible cases that would produce
+/// infinity (e.g. an ECDSA verification combining `u1·G + u2·Q`) are legitimately "no valid
+/// result" rather than a computation to recover from.
+pub fn point_add(
+    p1: (&[u32; 8], &[u32; 8]),
+    p2: (&[u32; 8], &[u32; 8]),
+) -> Option<([u32; 8], [u32; 8])> {
+    let (x1, y1) = p1;
+    let (x2, y2) = p2;
+
+    let lambda = if x1 == x2 {
+        if y1 != y2 {
+            return None;
+        }
+        // Doubling: lambda = (3*x1^2 + a) / (2*y1), with a = -3 for P-256.
+        let three_x1_sq = {
+            let x1_sq = mul_mod(x1, x1);
+            add_mod(&add_mod(&x1_sq, &x1_sq), &x1_sq)
+        };
+        let numerator = sub_mod(&three_x1_sq, &[3, 0, 0, 0, 0, 0, 0, 0]);
+        let two_y1 = add_mod(y1, y1);
+        mul_mod(&numerator, &inv_mod_p(&two_y1))
+    } else {
+        // lambda = (y2 - y1) / (x2 - x1)
+        let numerator = sub_mod(y2, y1);
+        let denominator = sub_mod(x2, x1);
+        mul_mod(&numerator, &inv_mod_p(&denominator))
+    };
+
+    let x3 = sub_mod(&sub_mod(&mul_mod(&lambda, &lambda), x1), x2);
+    let y3 = sub_mod(&mul_mod(&lambda, &sub_mod(x1, &x3)), y1);
+    Some((x3, y3))
+}
+
+/// Computes the modular inverse of `a` mod the P-256 field prime `p`, via Fermat's little
+/// theorem (`p` is prime).
+fn inv_mod_p(a: &[u32; 8]) -> [u32; 8] {
+    let p_minus_2 = sub256(&P, &[2, 0, 0, 0, 0, 0, 0, 0]);
+    pow_mod(a, &p_minus_2)
+}
+
 // Recover a y coordinate from the compact (x-only) P-256 representation.
 // Either square root is accepted because for ECDH the shared secret is the
 // x-coordinate of the result point, which is the same for both roots.
@@ -232,4 +359,95 @@ pub fn p256_recover_y(x_bytes: &[u8; 32]) -> Result<[u8; 32], crate::ImportError
     }
 
     Ok(words_to_bytes(&y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 2G and 3G, independently computed (Python's `cryptography` library, SECP256R1,
+    // derive_private_key(k).public_key() for k = 2, 3) rather than hand-derived, so these are a
+    // genuine cross-check on `point_add` rather than a restatement of its own formulas.
+    const TWO_G_X: [u8; 32] = [
+        0x7c, 0xf2, 0x7b, 0x18, 0x8d, 0x03, 0x4f, 0x7e, 0x8a, 0x52, 0x38, 0x03, 0x04, 0xb5, 0x1a,
+        0xc3, 0xc0, 0x89, 0x69, 0xe2, 0x77, 0xf2, 0x1b, 0x35, 0xa6, 0x0b, 0x48, 0xfc, 0x47, 0x66,
+        0x99, 0x78,
+    ];
+    const TWO_G_Y: [u8; 32] = [
+        0x07, 0x77, 0x55, 0x10, 0xdb, 0x8e, 0xd0, 0x40, 0x29, 0x3d, 0x9a, 0xc6, 0x9f, 0x74, 0x30,
+        0xdb, 0xba, 0x7d, 0xad, 0xe6, 0x3c, 0xe9, 0x82, 0x29, 0x9e, 0x04, 0xb7, 0x9d, 0x22, 0x78,
+        0x73, 0xd1,
+    ];
+    const THREE_G_X: [u8; 32] = [
+        0x5e, 0xcb, 0xe4, 0xd1, 0xa6, 0x33, 0x0a, 0x44, 0xc8, 0xf7, 0xef, 0x95, 0x1d, 0x4b, 0xf1,
+        0x65, 0xe6, 0xc6, 0xb7, 0x21, 0xef, 0xad, 0xa9, 0x85, 0xfb, 0x41, 0x66, 0x1b, 0xc6, 0xe7,
+        0xfd, 0x6c,
+    ];
+    const THREE_G_Y: [u8; 32] = [
+        0x87, 0x34, 0x64, 0x0c, 0x49, 0x98, 0xff, 0x7e, 0x37, 0x4b, 0x06, 0xce, 0x1a, 0x64, 0xa2,
+        0xec, 0xd8, 0x2a, 0xb0, 0x36, 0x38, 0x4f, 0xb8, 0x3d, 0x9a, 0x79, 0xb1, 0x27, 0xa2, 0x7d,
+        0x50, 0x32,
+    ];
+
+    #[test]
+    fn doubling_g_matches_known_2g() {
+        let gx = P256_GX;
+        let gy = P256_GY;
+        let (x, y) = point_add((&gx, &gy), (&gx, &gy)).expect("G + G is not the point at infinity");
+        assert_eq!(words_to_bytes(&x), TWO_G_X);
+        assert_eq!(words_to_bytes(&y), TWO_G_Y);
+    }
+
+    #[test]
+    fn adding_g_and_2g_matches_known_3g() {
+        let gx = P256_GX;
+        let gy = P256_GY;
+        let two_g = (bytes_to_words(&TWO_G_X), bytes_to_words(&TWO_G_Y));
+        let (x, y) = point_add((&gx, &gy), (&two_g.0, &two_g.1))
+            .expect("G + 2G is not the point at infinity");
+        assert_eq!(words_to_bytes(&x), THREE_G_X);
+        assert_eq!(words_to_bytes(&y), THREE_G_Y);
+
+        // Addition should be commutative.
+        let (x2, y2) = point_add((&two_g.0, &two_g.1), (&gx, &gy))
+            .expect("2G + G is not the point at infinity");
+        assert_eq!(x, x2);
+        assert_eq!(y, y2);
+    }
+
+    #[test]
+    fn point_add_of_a_point_and_its_negation_is_infinity() {
+        let gx = P256_GX;
+        let gy = P256_GY;
+        let neg_gy = sub256(&P, &gy);
+        assert_eq!(point_add((&gx, &gy), (&gx, &neg_gy)), None);
+    }
+
+    #[test]
+    fn mod_n_inverse_matches_independently_computed_value() {
+        // a = 123456789, inv = pow(a, -1, n), both computed independently via Python's `pow`.
+        let a = bytes_to_words(&[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x07, 0x5b, 0xcd, 0x15,
+        ]);
+        let expected_inv = bytes_to_words(&[
+            0xc4, 0x56, 0xe6, 0x57, 0xee, 0x50, 0x46, 0xdb, 0x78, 0xc1, 0xb3, 0xdd, 0x12, 0x1c,
+            0x76, 0xa6, 0x05, 0xcc, 0x12, 0xf9, 0x67, 0xc7, 0xfb, 0x51, 0xe5, 0x14, 0x33, 0xaa,
+            0xb9, 0x86, 0xb2, 0xef,
+        ]);
+
+        let inv = inv_mod_n(&a);
+        assert_eq!(inv, expected_inv);
+
+        let one = [1, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(mul_mod_n(&a, &inv), one);
+    }
+
+    #[test]
+    fn mod_n_addition_wraps_around_the_order() {
+        let order_minus_1 = sub256(&P256_ORDER, &[1, 0, 0, 0, 0, 0, 0, 0]);
+        let one = [1, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(add_mod_n(&order_minus_1, &one), [0; 8]);
+    }
 }
