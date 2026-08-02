@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
+
+use hexlit::hex;
+
+pub struct SignVector {
+    cose_alg: i16,
+    private_key: &'static [u8],
+    public_key: &'static [u8],
+    message: &'static [u8],
+    r: &'static [u8],
+    s: &'static [u8],
+}
+
+impl SignVector {
+    /// Runs the test vector against the Cal implementation: derives the public key from the
+    /// private key and checks it matches, then verifies the known-answer signature.
+    ///
+    /// Signing is not exercised here: `SignProvider::sign` uses a random per-signature nonce, so
+    /// its output cannot be checked against a fixed known answer. Pair this with
+    /// `embedded_cal::test_sign_selftest` for round-trip coverage of `sign()`.
+    ///
+    /// Panics if the algorithm is not supported, the derived public key does not match, or the
+    /// known-answer signature does not verify.
+    pub fn test_with<C: embedded_cal::Cal>(&self, cal: &mut C) {
+        use embedded_cal::{SignAlgorithm, SignProvider};
+
+        let cal = cal.sign();
+
+        let alg = <C::SignProvider as SignProvider>::Algorithm::from_cose_number(self.cose_alg)
+            .expect("algorithm not supported by CAL");
+
+        let private = cal
+            .import_secretkey_bytes(alg.clone(), self.private_key)
+            .expect("failed to load private key")
+            .into();
+        let public = cal.public_key(&private);
+
+        assert_eq!(
+            cal.export_publickey_bytes(&public).as_ref(),
+            self.public_key,
+            "public key not derived as expected"
+        );
+
+        let mut sig_bytes = [0u8; 64];
+        sig_bytes[..32].copy_from_slice(self.r);
+        sig_bytes[32..].copy_from_slice(self.s);
+        let signature = cal
+            .import_signature_bytes(alg, &sig_bytes)
+            .expect("failed to load known-answer signature");
+
+        cal.verify(&public, self.message, &signature)
+            .expect("known-answer signature did not verify");
+    }
+}
+
+// ECDSA P-256 / SHA-256 (COSE ES256, alg -7) known-answer vectors.
+//
+// Independently generated via Python's `cryptography` library (SECP256R1, `sign(message,
+// ECDSA(SHA256()))`), not hand-derived, so these are a genuine cross-check on the CAL
+// implementation rather than a restatement of its own arithmetic.
+pub const ECDSA_P256: &[SignVector] = &[
+    SignVector {
+        cose_alg: -7,
+        private_key: &hex!("0c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f672"),
+        public_key: &hex!("439ed13599d6e4f6ce33118b0421d0630e57c6919f6e0a8068c3c85a0c2412bf"),
+        message: b"sample",
+        r: &hex!("951d683e4af187dc4bf4a91853399fc082c078782ee190032a476cf0ae62bfcd"),
+        s: &hex!("fd24f7278499ae4649070ffca0eecbbb745c9162f15cc129ffff6a76f5dd0a58"),
+    },
+    SignVector {
+        cose_alg: -7,
+        private_key: &hex!("0519b423d715f8b581f4fa8ee59f4771a5b44c8130b4e3eacca54a56dda72b18"),
+        public_key: &hex!("03f5de2249cd1bd00347244cd6399ac88e514f6267ef2ea44c7fe061cdfd5b76"),
+        message: b"This is a longer test message used to exercise multi-block SHA-256 hashing inside the ECDSA test vector generation.",
+        r: &hex!("852d93e4833a0f923256beee6d12e6919f741517f8f6b895f1b0d27d70a4d31a"),
+        s: &hex!("1b178851c2c51d667b1827e682251a6f4a8391e01012fa103ceb103c46f594a7"),
+    },
+    // Private key = 1: public key is exactly the generator G.
+    SignVector {
+        cose_alg: -7,
+        private_key: &hex!("0000000000000000000000000000000000000000000000000000000000000001"),
+        public_key: &hex!("6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296"),
+        message: b"",
+        r: &hex!("79be73c6e14b12f1749efa1cd9519ccde06b851bbd499ade7e9169f2b2f316bd"),
+        s: &hex!("b844374ee8d0fd24c669f522f80b671779a5bba461d23bd464d1d87966bd4df7"),
+    },
+];
