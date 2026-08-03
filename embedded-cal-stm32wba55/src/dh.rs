@@ -2,8 +2,7 @@
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
 use embedded_cal::p256::{
-    B, P, P256_COEF_A, P256_GX, P256_GY, P256_ORDER, SQRT_EXP, bytes_to_words, ge, p256_recover_y,
-    words_to_bytes,
+    B, P, P256_COEF_A, P256_GX, P256_GY, P256_ORDER, SQRT_EXP, bytes_to_words, ge, words_to_bytes,
 };
 use rand_core::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -417,7 +416,7 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         data: &[u8],
     ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
         let x: [u8; 32] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
-        let y = p256_recover_y(&x)?;
+        let y = self.pka_recover_y(&x)?;
         Ok(PublicKey { alg, x, y })
     }
 
