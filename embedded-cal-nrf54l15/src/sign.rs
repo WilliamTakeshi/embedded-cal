@@ -2,8 +2,7 @@
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
 use embedded_cal::p256::{
-    P256_GX_BYTES, P256_GY_BYTES, P256_ORDER, add_mod_n, bytes_to_words, ge, inv_mod_n, mul_mod_n,
-    p256_recover_y, point_add, words_to_bytes,
+    P256_GX_BYTES, P256_GY_BYTES, P256_ORDER, bytes_to_words, ge, p256_recover_y,
 };
 use embedded_cal::{ImportError, SignatureInvalid};
 use rand_core::Rng as _;
@@ -31,13 +30,6 @@ pub struct PublicKey {
 pub struct Signature {
     r: [u8; 32],
     s: [u8; 32],
-}
-
-// Reduces any 256-bit value mod the P-256 order `n` in one step: `add_mod_n(x, 0)` reuses
-// `add_mod_n`'s single-subtraction reduction, which is valid for any x < 2^256 here because n is
-// close enough to 2^256 that 2^256 - 1 < 2n.
-fn reduce_mod_n(x: &[u32; 8]) -> [u32; 8] {
-    add_mod_n(x, &[0u32; 8])
 }
 
 impl embedded_cal::plumbing::sign::EcdsaP256 for super::Nrf54l15Cal {
@@ -94,9 +86,6 @@ impl embedded_cal::plumbing::sign::EcdsaP256 for super::Nrf54l15Cal {
     }
 
     fn sign_digest(&mut self, private: &Self::SecretKey, digest: &[u8; 32]) -> Self::Signature {
-        let z = reduce_mod_n(&bytes_to_words(digest));
-        let d = bytes_to_words(&private.scalar);
-
         loop {
             let mut k_bytes = [0u8; 32];
             loop {
@@ -107,25 +96,9 @@ impl embedded_cal::plumbing::sign::EcdsaP256 for super::Nrf54l15Cal {
                 }
             }
 
-            let (rx, _ry) = self.cracen_p256_mult(&k_bytes, &P256_GX_BYTES, &P256_GY_BYTES);
-            let r = reduce_mod_n(&bytes_to_words(&rx));
-            if r == [0u32; 8] {
-                continue;
+            if let Some((r, s)) = self.cracen_ecdsa_sign(&private.scalar, &k_bytes, digest) {
+                return Signature { r, s };
             }
-
-            let k = bytes_to_words(&k_bytes);
-            let k_inv = inv_mod_n(&k);
-            let rd = mul_mod_n(&r, &d);
-            let z_plus_rd = add_mod_n(&z, &rd);
-            let s = mul_mod_n(&k_inv, &z_plus_rd);
-            if s == [0u32; 8] {
-                continue;
-            }
-
-            return Signature {
-                r: words_to_bytes(&r),
-                s: words_to_bytes(&s),
-            };
         }
     }
 
@@ -141,24 +114,7 @@ impl embedded_cal::plumbing::sign::EcdsaP256 for super::Nrf54l15Cal {
             return Err(SignatureInvalid);
         }
 
-        let z = reduce_mod_n(&bytes_to_words(digest));
-        let w = inv_mod_n(&s);
-        let u1 = mul_mod_n(&z, &w);
-        let u2 = mul_mod_n(&r, &w);
-
-        let (p1x, p1y) =
-            self.cracen_p256_mult(&words_to_bytes(&u1), &P256_GX_BYTES, &P256_GY_BYTES);
-        let (p2x, p2y) = self.cracen_p256_mult(&words_to_bytes(&u2), &public.x, &public.y);
-
-        let sum = point_add(
-            (&bytes_to_words(&p1x), &bytes_to_words(&p1y)),
-            (&bytes_to_words(&p2x), &bytes_to_words(&p2y)),
-        );
-
-        match sum {
-            Some((x, _y)) if reduce_mod_n(&x) == r => Ok(()),
-            _ => Err(SignatureInvalid),
-        }
+        self.cracen_ecdsa_verify(&public.x, &public.y, digest, &signature.r, &signature.s)
     }
 
     fn export_signature_bytes<'s>(

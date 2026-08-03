@@ -76,13 +76,12 @@ pub const ECDSA_P256: &[SignVector] = &[
         r: &hex!("852d93e4833a0f923256beee6d12e6919f741517f8f6b895f1b0d27d70a4d31a"),
         s: &hex!("1b178851c2c51d667b1827e682251a6f4a8391e01012fa103ceb103c46f594a7"),
     },
-    // Private key = 1: public key is exactly the generator G.
     SignVector {
         cose_alg: -7,
-        private_key: &hex!("0000000000000000000000000000000000000000000000000000000000000001"),
-        public_key: &hex!("6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296"),
-        message: b"",
-        r: &hex!("79be73c6e14b12f1749efa1cd9519ccde06b851bbd499ade7e9169f2b2f316bd"),
-        s: &hex!("b844374ee8d0fd24c669f522f80b671779a5bba461d23bd464d1d87966bd4df7"),
+        private_key: &hex!("7a1e8f2c3b9d4a5e6f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e7"),
+        public_key: &hex!("3c976244c661396bf73775d98f90850931a8742d1a4442dfe0ee14fe0c592b8a"),
+        message: b"another test vector for embedded-cal ECDSA coverage",
+        r: &hex!("23480a65e2b1a5b44db30ee256b83c32ac1db8977fcfcf50d79ca87e7f1bd3e4"),
+        s: &hex!("b3e9dfff4d365d454ccc639e844a243a4c3bbc41ad0d1a64f5ac95f5d26acdd7"),
     },
 ];
