@@ -33,6 +33,24 @@ const RAM_RESULT_Y: usize = 116;
 const PKA_MODE_ECC_MULT: u8 = 0b10_0000;
 const PKA_RAM_WORDS: usize = 667;
 
+// PKA RAM slot indices for the generic modular-arithmetic modes (RM0493 section 28.4.2-28.4.6).
+// This is a *different* RAM layout than the ECC-mult slots above (section 28.4.15) --
+// addresses come straight from RM0493's per-mode tables (given there in bytes; divided by 4
+// for the word-indexed `pka.ram()` accessor) and are reused across modes the way the manual
+// itself reuses them (e.g. RAM@0xC68 is "Operand B" for add/mul but "Operand A" for exponentiation).
+const RAM_ARITH_EXP_LEN: usize = 0x400 / 4; // exponent length in bits (mode 0x02 only)
+const RAM_ARITH_OPERAND_LEN: usize = 0x408 / 4; // operand/modulus length in bits (all modes)
+const RAM_ARITH_OPERAND_A: usize = 0xA50 / 4;
+const RAM_ARITH_OPERAND_B: usize = 0xC68 / 4; // also: modexp base operand (IN/OUT)
+const RAM_ARITH_MODULUS: usize = 0x1088 / 4;
+const RAM_ARITH_RESULT: usize = 0xE78 / 4; // also: modexp exponent (IN)
+const RAM_ARITH_MONT_R2: usize = 0x620 / 4; // Montgomery parameter R^2 mod n
+const RAM_ARITH_EXP_RESULT: usize = 0x838 / 4; // modexp result
+
+const PKA_MODE_MONT_PARAM: u8 = 0b00_0001;
+const PKA_MODE_MOD_ADD: u8 = 0b00_1110;
+const PKA_MODE_MOD_MUL: u8 = 0b01_0000;
+
 #[derive(PartialEq, Eq, Debug, Clone, Zeroize)]
 pub enum DhAlgorithm {
     EcdhP256,
@@ -158,6 +176,127 @@ impl super::Stm32wba55Cal {
         self.pka_zero_ram();
 
         (result_x, result_y)
+    }
+
+    // Starts a PKA operation in the given mode, waits for completion, and asserts no
+    // error flags were raised. Caller writes operands into RAM before calling this, and
+    // is responsible for clearing flags/RAM before/after around the whole operation.
+    fn pka_run(&mut self, mode: u8) {
+        self.pka.cr().write(|w| {
+            w.set_en(true);
+            w.set_mode(mode);
+            w.set_start(true);
+        });
+
+        while self.pka.sr().read().busy() {}
+
+        let sr = self.pka.sr().read();
+        debug_assert!(
+            !sr.addrerrf() && !sr.ramerrf(),
+            "PKA operation (mode {mode:#04x}) failed (SR error flags set)"
+        );
+    }
+
+    // Modular addition (a + b) mod P on the PKA (RM0493 section 28.4.3, mode 0x0E).
+    fn pka_add_mod(&mut self, a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        self.pka.ram(RAM_ARITH_OPERAND_LEN).write_value(256);
+        self.pka_write_field(RAM_ARITH_OPERAND_A, a);
+        self.pka_write_field(RAM_ARITH_OPERAND_B, b);
+        self.pka_write_field(RAM_ARITH_MODULUS, &P);
+
+        self.pka_run(PKA_MODE_MOD_ADD);
+
+        let result = self.pka_read_field(RAM_ARITH_RESULT);
+
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        result
+    }
+
+    // Computes the Montgomery parameter R^2 mod P (RM0493 section 28.4.2, mode 0x01),
+    // needed to bring an operand into the Montgomery domain before a Montgomery
+    // multiplication (mode 0x10, see `pka_mont_mul`).
+    fn pka_mont_param(&mut self) -> [u32; 8] {
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        self.pka.ram(RAM_ARITH_OPERAND_LEN).write_value(256);
+        self.pka_write_field(RAM_ARITH_MODULUS, &P);
+
+        self.pka_run(PKA_MODE_MONT_PARAM);
+
+        let r2 = self.pka_read_field(RAM_ARITH_MONT_R2);
+
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        r2
+    }
+
+    // One raw Montgomery-multiplication hardware call (RM0493 section 28.4.5, mode 0x10):
+    // computes (a * b) mod P. Whether the result lands in the Montgomery or natural domain
+    // depends on which domain `a`/`b` are in -- see `pka_mul_mod`'s two-call use of this.
+    fn pka_mont_mul(&mut self, a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        self.pka.ram(RAM_ARITH_OPERAND_LEN).write_value(256);
+        self.pka_write_field(RAM_ARITH_OPERAND_A, a);
+        self.pka_write_field(RAM_ARITH_OPERAND_B, b);
+        self.pka_write_field(RAM_ARITH_MODULUS, &P);
+
+        self.pka_run(PKA_MODE_MOD_MUL);
+
+        let result = self.pka_read_field(RAM_ARITH_RESULT);
+
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        result
+    }
+
+    // Modular multiplication (a * b) mod P, entirely on PKA hardware. Per RM0493 section
+    // 28.4.5's "simple modular multiplication" recipe: bring `a` into the Montgomery
+    // domain (multiply by R^2 mod P), then multiply that by `b` -- the second Montgomery
+    // multiplication naturally yields the result back in the natural domain.
+    fn pka_mul_mod(&mut self, a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+        let r2 = self.pka_mont_param();
+        let a_mont = self.pka_mont_mul(a, &r2);
+        self.pka_mont_mul(&a_mont, b)
     }
 }
 
