@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
 use embedded_cal::p256::{
-    B, P, P256_GX, P256_GY, P256_ORDER, bytes_to_words, ge, p256_recover_y, words_to_bytes,
+    B, P, P256_COEF_A, P256_GX, P256_GY, P256_ORDER, SQRT_EXP, bytes_to_words, ge, p256_recover_y,
+    words_to_bytes,
 };
 use rand_core::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -50,6 +51,7 @@ const RAM_ARITH_EXP_RESULT: usize = 0x838 / 4; // modexp result
 const PKA_MODE_MONT_PARAM: u8 = 0b00_0001;
 const PKA_MODE_MOD_ADD: u8 = 0b00_1110;
 const PKA_MODE_MOD_MUL: u8 = 0b01_0000;
+const PKA_MODE_MOD_EXP_FAST: u8 = 0b00_0010;
 
 #[derive(PartialEq, Eq, Debug, Clone, Zeroize)]
 pub enum DhAlgorithm {
@@ -297,6 +299,71 @@ impl super::Stm32wba55Cal {
         let r2 = self.pka_mont_param();
         let a_mont = self.pka_mont_mul(a, &r2);
         self.pka_mont_mul(&a_mont, b)
+    }
+
+    // Modular exponentiation base^exp mod P on the PKA (RM0493 section 28.4.6, fast mode
+    // 0x02). `exp` is public here (the fixed square-root exponent), so the side-channel
+    // protected mode 0x03 is unnecessary.
+    fn pka_pow_mod(&mut self, base: &[u32; 8], exp: &[u32; 8]) -> [u32; 8] {
+        let r2 = self.pka_mont_param();
+
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        self.pka.ram(RAM_ARITH_EXP_LEN).write_value(256);
+        self.pka.ram(RAM_ARITH_OPERAND_LEN).write_value(256);
+        self.pka_write_field(RAM_ARITH_OPERAND_B, base);
+        self.pka_write_field(RAM_ARITH_RESULT, exp);
+        self.pka_write_field(RAM_ARITH_MODULUS, &P);
+        self.pka_write_field(RAM_ARITH_MONT_R2, &r2);
+
+        self.pka_run(PKA_MODE_MOD_EXP_FAST);
+
+        let result = self.pka_read_field(RAM_ARITH_EXP_RESULT);
+
+        self.pka.clrfr().write(|w| {
+            w.set_procendfc(true);
+            w.set_ramerrfc(true);
+            w.set_addrerrfc(true);
+            w.set_operrfc(true);
+        });
+        self.pka_zero_ram();
+
+        result
+    }
+
+    // Recovers the y-coordinate of a P-256 point from its x-coordinate, entirely on PKA
+    // hardware: computes rhs = x^3 + A*x + B mod P via pka_add_mod/pka_mul_mod, then
+    // y = rhs^((p+1)/4) mod P via pka_pow_mod (valid since p = 3 mod 4), and verifies
+    // y^2 == rhs. Mirrors the software `p256_recover_y` composition, just hardware-backed.
+    pub(super) fn pka_recover_y(
+        &mut self,
+        x_bytes: &[u8; 32],
+    ) -> Result<[u8; 32], embedded_cal::ImportError> {
+        let x = bytes_to_words(x_bytes);
+
+        if ge(&x, &P) {
+            return Err(embedded_cal::ImportError);
+        }
+
+        let x2 = self.pka_mul_mod(&x, &x);
+        let x3 = self.pka_mul_mod(&x2, &x);
+        let ax = self.pka_mul_mod(&P256_COEF_A, &x);
+        let sum = self.pka_add_mod(&x3, &ax);
+        let rhs = self.pka_add_mod(&sum, &B);
+
+        let y = self.pka_pow_mod(&rhs, &SQRT_EXP);
+
+        if self.pka_mul_mod(&y, &y) != rhs {
+            return Err(embedded_cal::ImportError);
+        }
+
+        Ok(words_to_bytes(&y))
     }
 }
 
