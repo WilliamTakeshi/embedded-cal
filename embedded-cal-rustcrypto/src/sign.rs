@@ -235,3 +235,71 @@ pub enum Signature<BSIG> {
     EcdsaP256(p256::ecdsa::Signature),
     Direct(BSIG),
 }
+
+impl<Base: Cal + embedded_cal::plumbing::sign::EcdsaP256> embedded_cal::plumbing::sign::EcdsaP256
+    for RustcryptoCalExtender<Base>
+{
+    const SUPPORTED: bool = Base::SUPPORTED;
+
+    type VisibleSecretKey = Base::VisibleSecretKey;
+    type SecretKey = Base::SecretKey;
+    type PublicKey = Base::PublicKey;
+    type Signature = Base::Signature;
+
+    fn generate_visible(&mut self) -> Self::VisibleSecretKey {
+        self.base.generate_visible()
+    }
+
+    fn export_secretkey_bytes<'s>(
+        &mut self,
+        secretkey: &'s Self::VisibleSecretKey,
+    ) -> impl AsRef<[u8]> + use<'s, Base> {
+        self.base.export_secretkey_bytes(secretkey)
+    }
+
+    fn import_secretkey_bytes(
+        &mut self,
+        secret: &[u8],
+    ) -> Result<Self::VisibleSecretKey, ImportError> {
+        self.base.import_secretkey_bytes(secret)
+    }
+
+    fn export_publickey_bytes<'p>(
+        &mut self,
+        public: &'p Self::PublicKey,
+    ) -> impl AsRef<[u8]> + use<'p, Base> {
+        self.base.export_publickey_bytes(public)
+    }
+
+    fn import_publickey_bytes(&mut self, data: &[u8]) -> Result<Self::PublicKey, ImportError> {
+        self.base.import_publickey_bytes(data)
+    }
+
+    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
+        self.base.public_key(private)
+    }
+
+    fn sign_digest(&mut self, private: &Self::SecretKey, digest: &[u8; 32]) -> Self::Signature {
+        self.base.sign_digest(private, digest)
+    }
+
+    fn verify_digest(
+        &mut self,
+        public: &Self::PublicKey,
+        digest: &[u8; 32],
+        signature: &Self::Signature,
+    ) -> Result<(), SignatureInvalid> {
+        self.base.verify_digest(public, digest, signature)
+    }
+
+    fn export_signature_bytes<'s>(
+        &mut self,
+        signature: &'s Self::Signature,
+    ) -> impl AsRef<[u8]> + use<'s, Base> {
+        self.base.export_signature_bytes(signature)
+    }
+
+    fn import_signature_bytes(&mut self, data: &[u8]) -> Result<Self::Signature, ImportError> {
+        self.base.import_signature_bytes(data)
+    }
+}
