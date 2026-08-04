@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![no_std]
 
-use embedded_cal::empty::{EmptyCal, NoAlgorithms};
+use embedded_cal::empty::EmptyCal;
 use embedded_cal::plumbing::hash::SHA2SHORT_BLOCK_SIZE;
 use stm32_metapac::{
     aes, hash, pka,
@@ -14,6 +14,7 @@ use stm32_metapac::{
 };
 mod aead;
 mod dh;
+mod sign;
 mod try_rng;
 
 const WORD_SIZE: usize = 4;
@@ -38,7 +39,8 @@ impl embedded_cal::Cal for Stm32wba55Cal {
     type AeadProvider = Self;
     type HashProvider = EmptyCal<false>;
     type HmacProvider = Self;
-    // PKA-backed ECDSA is out of scope for now (see the EcdsaP256 stub above).
+    // The board's PKA-backed ECDSA (see `sign.rs`) can back ECDSA, but only once composed with a
+    // HashProvider (see embedded-cal-software-demo::Extender); bare Stm32wba55Cal has none.
     type SignProvider = EmptyCal<false>;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
@@ -377,86 +379,6 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
 impl embedded_cal::plumbing::Plumbing for Stm32wba55Cal {}
 
 impl embedded_cal::plumbing::hash::Hash for Stm32wba55Cal {}
-
-// PKA-backed ECDSA is out of scope for now; SUPPORTED=false stub, same shape as
-// EmptyCal<true>'s.
-impl embedded_cal::plumbing::sign::EcdsaP256 for Stm32wba55Cal {
-    const SUPPORTED: bool = false;
-
-    type VisibleSecretKey = NoAlgorithms;
-    type SecretKey = NoAlgorithms;
-    type PublicKey = NoAlgorithms;
-    type Signature = NoAlgorithms;
-
-    fn generate_visible(&mut self) -> Self::VisibleSecretKey {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_secretkey_bytes<'s>(
-        &mut self,
-        secretkey: &'s Self::VisibleSecretKey,
-    ) -> impl AsRef<[u8]> + use<'s> {
-        match *secretkey {};
-        &[]
-    }
-
-    fn import_secretkey_bytes(
-        &mut self,
-        _secret: &[u8],
-    ) -> Result<Self::VisibleSecretKey, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_publickey_bytes<'p>(
-        &mut self,
-        public: &'p Self::PublicKey,
-    ) -> impl AsRef<[u8]> + use<'p> {
-        match *public {};
-        &[]
-    }
-
-    fn import_publickey_bytes(
-        &mut self,
-        _data: &[u8],
-    ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-
-    fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
-        match *private {}
-    }
-
-    fn sign_digest(&mut self, private: &Self::SecretKey, _digest: &[u8; 32]) -> Self::Signature {
-        match *private {}
-    }
-
-    fn verify_digest(
-        &mut self,
-        public: &Self::PublicKey,
-        _digest: &[u8; 32],
-        _signature: &Self::Signature,
-    ) -> Result<(), embedded_cal::SignatureInvalid> {
-        match *public {}
-    }
-
-    #[allow(unreachable_code, reason = "needed to satisfy RPIT")]
-    fn export_signature_bytes<'s>(
-        &mut self,
-        signature: &'s Self::Signature,
-    ) -> impl AsRef<[u8]> + use<'s> {
-        match *signature {};
-        &[]
-    }
-
-    fn import_signature_bytes(
-        &mut self,
-        _data: &[u8],
-    ) -> Result<Self::Signature, embedded_cal::ImportError> {
-        panic!("user disregarded SUPPORTED=false")
-    }
-}
 
 impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
     const SUPPORTED: bool = true;
