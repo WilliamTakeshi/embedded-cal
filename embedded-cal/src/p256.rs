@@ -56,7 +56,7 @@ pub const P256_GX: [u32; 8] = bytes_to_words(&P256_GX_BYTES);
 pub const P256_GY: [u32; 8] = bytes_to_words(&P256_GY_BYTES);
 
 // Exponent (p+1)/4 for modular square root (P-256: p ≡ 3 mod 4)
-const SQRT_EXP: [u32; 8] = [
+pub const SQRT_EXP: [u32; 8] = [
     0x0000_0000,
     0x0000_0000,
     0x4000_0000,
@@ -97,16 +97,20 @@ pub fn ge(a: &[u32; 8], b: &[u32; 8]) -> bool {
     true
 }
 
-fn sub256(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
+const fn sub256(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
     let mut r = [0u32; 8];
     let mut borrow: i64 = 0;
-    for i in 0..8 {
+    let mut i = 0;
+    while i < 8 {
         let d = a[i] as i64 - b[i] as i64 - borrow;
         r[i] = d as u32;
         borrow = if d < 0 { 1 } else { 0 };
+        i += 1;
     }
     r
 }
+
+pub const P256_COEF_A: [u32; 8] = sub256(&P, &[3, 0, 0, 0, 0, 0, 0, 0]);
 
 fn add_mod(a: &[u32; 8], b: &[u32; 8]) -> [u32; 8] {
     let mut r = [0u32; 8];
