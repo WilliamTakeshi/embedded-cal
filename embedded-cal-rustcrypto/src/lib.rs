@@ -133,6 +133,13 @@ mod tests {
     }
 
     #[test]
+    fn test_hkdf_sha256() {
+        let mut cal = RustcryptoCal::new();
+
+        testvectors::test_hkdf_sha256(&mut cal);
+    }
+
+    #[test]
     fn test_aead_aesccm_16_64_128() {
         let mut cal = RustcryptoCal::new();
 
