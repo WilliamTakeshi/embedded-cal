@@ -5,6 +5,7 @@ mod aead;
 mod dh;
 mod hash;
 mod rng;
+mod sign;
 
 use digest::Digest;
 use embedded_cal::{accessor::*, empty};
@@ -63,7 +64,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = HmacProviderOf<Base>;
-    type SignProvider = SignProviderOf<Base>;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -78,7 +79,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
         self.base.hmac()
     }
     fn sign(&mut self) -> &mut Self::SignProvider {
-        self.base.sign()
+        self
     }
 }
 
