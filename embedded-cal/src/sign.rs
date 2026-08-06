@@ -98,5 +98,7 @@ pub trait SignAlgorithm: Sized + PartialEq + Eq + core::fmt::Debug + Clone {
     ///
     /// The algorithm number comes from the ["COSE Algorithms"
     /// registry](https://www.iana.org/assignments/cose/cose.xhtml#algorithms) maintained by IANA.
-    fn from_cose_number(alg: impl Into<i128>) -> Option<Self>;
+    fn from_cose_number(_alg: impl Into<i128>) -> Option<Self> {
+        None
+    }
 }
