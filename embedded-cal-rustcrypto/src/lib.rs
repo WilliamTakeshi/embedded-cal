@@ -161,6 +161,15 @@ mod tests {
     }
 
     #[test]
+    fn test_ecdsa_p256() {
+        let mut cal = RustcryptoCal::new();
+
+        for vec in testvectors::sign::ECDSA_P256 {
+            vec.test_with(&mut cal);
+        }
+    }
+
+    #[test]
     fn test_aead_aesccm_16_64_256() {
         let mut cal = RustcryptoCal::new();
 
