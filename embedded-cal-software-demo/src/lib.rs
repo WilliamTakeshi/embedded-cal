@@ -6,17 +6,25 @@
 //! only does the hard work of the SHA hashes and not the clerical buffering / padding.
 #![no_std]
 
-use embedded_cal::{Cal, accessor::*, plumbing::Plumbing};
+use embedded_cal::{
+    Cal,
+    accessor::*,
+    plumbing::{Plumbing, ecdsa},
+};
 
 mod hash;
 mod hkdf;
 mod hmac;
 mod rng;
+mod sign;
 
 pub trait ExtenderConfig {
     const IMPLEMENT_SHA2SHORT: bool;
 
-    type Base: Cal + Plumbing;
+    type Base: Cal
+        + Plumbing
+        + ecdsa::EcdsaP256
+        + rand_core::TryRng<Error = core::convert::Infallible>;
 }
 
 impl<EC: ExtenderConfig> Extender<EC> {
@@ -33,7 +41,7 @@ impl<EC: ExtenderConfig> embedded_cal::Cal for Extender<EC> {
     type AeadProvider = AeadProviderOf<EC::Base>;
     type HashProvider = Self;
     type HmacProvider = Self;
-    type SignProvider = SignProviderOf<EC::Base>;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self.0.dh()
@@ -52,7 +60,7 @@ impl<EC: ExtenderConfig> embedded_cal::Cal for Extender<EC> {
     }
 
     fn sign(&mut self) -> &mut Self::SignProvider {
-        self.0.sign()
+        self
     }
 }
 

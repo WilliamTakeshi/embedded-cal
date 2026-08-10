@@ -6,6 +6,7 @@ mod aead;
 mod descriptor;
 mod dh;
 mod microcode;
+mod sign;
 mod try_rng;
 
 use descriptor::{DescriptorChain, Input, Output};
