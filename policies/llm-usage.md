@@ -1,7 +1,6 @@
 # LLM Usage Policy
 
 This is a moderation policy for how LLMs are used in `lake-rs/embedded-cal`.
-For additional information about the policy itself, see [the appendix](#appendix).
 
 ## Overview
 
@@ -22,13 +21,6 @@ The policy's guidelines are roughly as follows:
 > LLMs work best when used as a tool to write _better_, not _faster_.
 
 > We carve out a space for "experimentation" to inform future revisions to this policy.
-
-### Moderation vs guidance
-
-This document only contains our moderation policy.
-For technical guidance and suggestions, see the [rustc-dev-guide][llm-guidance].
-
-[llm-guidance]: https://rustc-dev-guide.rust-lang.org/llm-guidance.html
 
 ## Rules
 
@@ -183,155 +175,4 @@ As an exception, PRs written before this policy went into effect are exempt from
 
 ### Procedures
 
-LLM-created PRs must be tagged with a new `llm-assisted` label.
-All such PRs will be posted to a new (private) Zulip channel, which will be accessible to all members of the `rust-lang` organization.
-The goal of the channel is _not_ to act as an additional gatekeeper on LLM-created PRs.
-Instead, it's to collect information about _whether this experiment is working_:
-Are people doing interesting and useful things with LLMs? Are they learning? Are they making repeat contributions?
-
-Because the new channel is private, it will have higher-than-normal standards for what counts as on-topic.
-For example, the following are on-topic:
-
-- Whether a PR meets the criteria for the experiment exception
-- Whether a PR follows the policy in general
-
-And the following are off-topic:
-
-- Technical and design discussions. These should be posted directly on the PR or in a public Zulip channel.
-- Discussions about effort, communication style, or intent
-- General discussions about the LLM policy
-
-### Circuit breaker
-
-To avoid the risk of LLMs "overwhelming" the codebase, or becoming de-facto required, we set a limit on how many LLM-created PRs can be merged.
-If more than half of PRs merged in a 6-week window are LLM-created, we disallow merging new LLM-created PRs until we go back below 50%, with a minimum cooldown of 10 days.
-This window is chosen to align with our existing release cycle, and the cooldown is to avoid flip-flopping between allowed and disallowed, with a period chosen to align with our FCP process.
-
-The cooldown is intended to encourage discussion:
-
-- How is the experiment going?
-- Are we adopting AI sustainably?
-  Are we including contributors who choose not to use LLMs?
-- Are there any changes we want to make to our policy?
-
-To avoid inconsistent enforcement, and the resulting resentment,
-we strongly suggest that this circuit breaker be automated.
-
-## Appendix
-
-### Scope
-
-This policy only applies to `lake-rs/embedded-cal`, and only to the teams that have ratified it: compiler, libs, types, rustdoc, bootstrap, and their subteams.
-The following are not in scope and are free to set their own policies:
-
-- Other repositories in `rust-lang`
-- Submodules, subtrees, and crates.io dependencies
-- Teams that have not ratified the policy, such as lang and edition
-
-For example, the following do not fall under the policy:
-
-- Tracking issues for T-lang
-- T-lang proposals
-- T-lang stabilization reports
-- Language documentation
-- The style guide
-- Names of compiler lints. This only applies to the names themselves; the diagnostic messages are still covered under this policy.
-- Direct quotes from any of the above in documentation or diagnostics.
-
-### Motivation and guiding principles
-
-There is not a consensus within the Rust project—and likely never will be—about when/how/where it is acceptable to use AI-based tools.
-Many members of the Rust project and community find value in AI;
-many others feel that its negative impact on society and the climate are severe enough that no use is acceptable.
-Still others are working out their opinion.
-
-Despite these differences, there are many values we all share:
-
-- Building a community of deep experts in our collective projects.
-- Building an inclusive community where all feel welcome and respected.
-
-And many facts we agree on:
-
-- Many people find LLM-generated code and writing deeply unpleasant to read or review.
-- Many people find LLMs to be a significant aid to learning and discovery.
-- LLMs are a new technology, and we are still learning how to use, moderate, and improve them.
-
-With those facts and values in mind, the policy is designed with the following goals:
-
-- Build an intentionally conservative policy that lets us maintain the standard of quality that Rust is known for.
-- Limit LLM contributions to the very highest standard of quality, to show that our guideline of "better, not faster" isn't just words.
-- Make the policy enforceable and easy to moderate.
-- Make the policy consistent and easy to understand and summarize, even for people who haven't read it in detail.
-- Avoid making LLMs a requirement to contribute, to be inclusive of contributors who choose not to use them, and to avoid making Rust "pay-to-play".
-
-### Moderation policy
-
-#### It's not your job to play detective
-
-["The optimal amount of fraud is not zero"](https://www.bitsaboutmoney.com/archive/optimal-amount-of-fraud/).
-Don't try to be the police for whether someone has used an LLM.
-You are not required to "actively look" for whether an LLM was involved.
-
-Style is not evidence, and English-as-a-second-language speakers, neurodivergent people, and over-explainers are the most likely to be accused of writing like an LLM.
-
-If it's clear someone's broken the rules, point them to this policy;
-otherwise, strongly prefer [reporting to mods](https://rust-lang.org/policies/code-of-conduct/) over public accusations.
-Reporting to moderation is not intended to be a penalty;
-the mod team is interested in seeing non-violations as well as violations.
-As always, the mod team is free to exercise their own judgement and discretion.
-
-#### Be honest
-
-Conversely, you're expected to be honest about your use of LLMs and the extent of that use.
-If you are not sure where something you would like to do falls in this policy, please talk to the [moderation team](mailto:rust-mods@rust-lang.org).
-Don't try to hide it.
-
-Deliberately misrepresenting your use of LLMs is not welcome and [may result in moderation action](https://rust-lang.org/policies/code-of-conduct/#moderation).
-
-#### Penalties
-
-The policies marked with a 🔨 follow the same guidelines as the code of conduct:
-Violations will first result in a warning, and repeated violations may result in a ban.
-
-- 🔨 Violations of the "Be honest" section
-
-Other violations are left up to the discretion of reviewers and moderators.
-For minor violations we recommend telling the author that we can't review the PR until it complies with the policy, with pointers to exactly what they need to do.
-For major violations or extractive PRs, we recommend closing the PR or issue.
-
-It is **not** ok to harass a contributor for using an LLM.
-All contributors must be treated with respect.
-The Code of Conduct applies to _all_ conversations in the Rust project.
-
-### Responsibility
-
-Your contributions are your responsibility; you cannot place any blame on an LLM.
-
-- ℹ️ This includes when asking people to address review comments originally created by an LLM. See "review bots" under ⚠️ above.
-
-### The meaning of "originally created by an LLM"
-
-This document uses the phrase "originally created by an LLM" to mean "text that was generated by an LLM (and then possibly edited by a human)".
-No amount of editing can change how it was originally created;
-the origin sets the initial style, and that style is very hard to change once it's set.
-
-For more background about analogous reasoning, see ["What Colour are your bits?"](https://ansuz.sooke.bc.ca/entry/23).
-
-This policy makes no distinction between LLM output that comes from a chat interface and output that comes from editor auto-completion.
-In most cases the output is "trivial" (see above under ⚠️), but regardless, it is not treated specially by this policy.
-
-### Conditions for modification or dissolution
-
-This policy is not set in stone, and we can evolve it as we gain more experience working with LLMs.
-
-Minor changes, such as typo fixes, only require a normal PR approval.
-Major changes, such as adding a new rule or canceling an existing rule, require a successful [MCP (Major Change Proposal)](../compiler/proposals-and-stabilization.html#proposals) (2 approvals and no concerns) from each team that ratified the policy.
-Changes to the guidance in the rustc-dev-guide have no special requirements for modification.
-
-This policy can be dissolved in a few ways:
-
-- An accepted FCP by the teams that ratified the policy.
-- An objective concern raised about active harm the policy is having on the Rust project, with evidence, as decided by a leadership council FCP.
-- If the proposed [LLM committee](https://github.com/rust-lang/leadership-council/issues/308) (or any similar dedicated project-wide body) is formed, any policy it sets will take precedence over this policy.
-
-If evolving this policy with the above mechanism proves unworkable, especially if a team ends up significantly hindered in autonomously making decisions concerning its own purview, then these conditions for modification can be adjusted by a leadership council FCP.
+LLM-created PRs must be disclosured in the PR message.
