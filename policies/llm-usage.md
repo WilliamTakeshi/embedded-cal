@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MIT OR Apache-2.0
+SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
+-->
+
 # LLM Usage Policy
 
 This is a policy for how LLMs are used in `lake-rs/embedded-cal`.
