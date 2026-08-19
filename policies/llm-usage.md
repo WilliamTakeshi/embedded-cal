@@ -1,16 +1,16 @@
 # LLM Usage Policy
 
-This is a moderation policy for how LLMs are used in `lake-rs/embedded-cal`.
+This is a policy for how LLMs are used in `lake-rs/embedded-cal`.
 
 ## Overview
 
 Using LLMs while working on `lake-rs/embedded-cal` is conditionally allowed, when done with care.
 LLMs are not a substitute for thought,
-and we do not allow them to be used bin ways that risk losing our shared social and technical understanding of the project,
+and we do not allow them to be used in ways that risk losing our shared social and technical understanding of the project,
 nor in ways that hurt our goals of creating a strong community.
 
 We are aware that many clauses in this policy are unenforceable.
-Our goal is _not_ to catch every violation (see [It's not your job to play detective](#its-not-your-job-to-play-detective), below).
+Our goal is _not_ to catch every violation.
 Instead, our goal is to remove plausible deniability: to force a choice between following the policy and intentionally violating it.
 See [Money laundering and AML compliance](https://www.bitsaboutmoney.com/archive/money-laundering-and-aml-compliance/) for more background about the motivation.
 
@@ -30,15 +30,12 @@ The policy's guidelines are roughly as follows:
 - ❌ Banned.
 - ⚠️ Allowed with caveats. Must disclose that an LLM was used.
 - ℹ️ Adds additional detail to the policy. These bullets are normative.
-- 💡 Indicates that there are suggestions for this bullet in the dev-guide.
-- 🔨 Violating this clause counts as a violation of the Code of Conduct.
 
 ### Summary
 
 - ✅ Allowed: Private use.
-- ❌ Banned: LLM-created comments, docs, or diagnostics. Replacing human judgement with LLM judgement. Requiring people to use an LLM to contribute.
+- ❌ Banned: LLM-created comments, docs. Replacing human judgement with LLM judgement. Requiring people to use an LLM to contribute.
 - ⚠️ Conditionally allowed: Trivial changes, machine translation, LLM reviews and review bots, LLM-created code _under the experiment rules_.
-- 🔨 Carries a moderation penalty: Lying.
 
 ### Non-exhaustive policy
 
@@ -61,8 +58,8 @@ The following are allowed.
     - ℹ️ This does not apply to public comments by the LLM. See "review bots" under ⚠️ below.
   - Writing dev-tools for your own personal use using an LLM.
   - Using an LLM to generate possible solutions to an issue, learning from them, and then writing something from scratch in your own style.
-- Using an LLM in the creation of clearly experimental code changes that are not meant to be reviewed but must live as PRs on `lake-rs/embedded-cal` for tooling reasons, such as to run crater or perf.
-  - "Clearly experimental" includes markers such as `S-experimental` labels, `[PERF]` titles, or `r? ghost` comments.
+- Using an LLM in the creation of clearly experimental code changes that are not meant to be reviewed but must live as PRs on `lake-rs/embedded-cal`.
+  - "Clearly experimental" includes markers such as `[PERF]` or `[EXPERIMENTAL]` titles.
   - We strongly recommend, but do not require, that experimental PRs disclose LLM usage.
     The goal here is to avoid other people picking up the draft work without knowing it's LLM-generated.
   - ℹ️ If a PR is no longer marked as clearly experimental, at that point disclosure is required.
@@ -77,20 +74,14 @@ The following are banned.
   - ℹ️ This does not apply if the LLM content is clearly quoted and marked; you can post that.
     However, the content of the comment must stand on its own even without the LLM content; it's not a substitute for your own words.
   - ℹ️ See also "machine-translation" in ⚠️ below.
-  - ℹ️ See also "Scope" in the appendix below.
 - Documentation that is originally created by an LLM.
   - ℹ️ This includes non-trivial source comments, such as doc-comments, safety comments, or multiple paragraphs of non-doc-comments.
-  - ℹ️ This includes compiler diagnostics.
-    LLMs are conditionally allowed to assist with the _logic_ surrounding a diagnostic (see "Experiment: LLM-created code changes" below),
-    but they must not be used to create the message itself.
   - ℹ️ This does not include "trivial" changes (see ⚠️ below).
 - Policies or processes that are written such that an LLM is required to execute them.
   - For example, you must not _only_ document where tests live with an `AGENTS.md`.
     Documentation must be authored for humans primarily, and LLM documentation may only summarize it, not add new detail.
 - Treating an LLM review as a sufficient condition to merge or reject a change.
   LLM reviews, if enabled, **must** be advisory-only.
-  Teams can have a policy that code can be merged without review, and they can have a policy that code must be reviewed by at least one person,
-  but they may not have a policy that an LLM review substitutes for a human review.
   - ℹ️ See "review bots" in ⚠️ below.
   - ℹ️ An LLM review does not substitute for self-review. Authors are expected to review their own code before posting and after each change.
 
@@ -112,13 +103,7 @@ All uses under "⚠️ Allowed with caveats" **must** disclose that an LLM was u
     - Changing a word to a synonym
     - Type signatures for a trait implementation
   - ℹ️ Be cautious about PRs that consist solely of trivial changes.
-    See also [the compiler team's typo fix policy](https://rustc-dev-guide.rust-lang.org/contributing.html#writing-documentation:~:text=Please%20notice%20that%20we%20don%E2%80%99t%20accept%20typography%2Fspellcheck%20fixes%20to%20internal%20documentation).
-  - 💡 See the [dev-guide][llm-guidance] for additional suggestions.
-  - For more background about concepts that inspired this policy, see
-    [threshold of originality](https://fsfe.org/news/2025/news-20250515-01.en.html)
-    and [the Google v Oracle ruling](https://en.wikipedia.org/wiki/Google_LLC_v._Oracle_America,_Inc.) that copying API declarations is fair use.
 - Using an LLM to discover bugs, as long as you personally verify the bug.
-  Please refer to [our guidelines for fuzzers](https://rustc-dev-guide.rust-lang.org/fuzzing.html#guidelines).
   - ℹ️ This also includes reviewers who use LLMs to discover flaws in unmerged code.
   - ℹ️ See also "Comments \[...\] posted from a personal user account" under ❌ above.
 - Using an LLM as a "review bot" for PRs.
@@ -130,7 +115,6 @@ All uses under "⚠️ Allowed with caveats" **must** disclose that an LLM was u
   - ℹ️ LLM comments **must not** be blocking; reviewers must indicate which comments they want addressed.
     - In other words, reviewers must explicitly endorse an LLM comment before blocking a PR. They are responsible for their own analysis of the LLM's comment and cannot treat it as a CI failure.
   - ℹ️ This does not apply to private use of an LLM for reviews; see ✅ above.
-  - 💡 See the [dev-guide][llm-guidance] for additional suggestions.
 
 ## Experiment: LLM-created code changes intended for review
 
@@ -146,13 +130,10 @@ Pre-arranged, non-critical, high-quality, well-tested, and well-reviewed code ch
      This must be the _same_ reviewer who will be assigned to the PR.
    - Authors are, of course, allowed to start work on a change before finding a reviewer.
      However, they must find a reviewer before opening a PR.
-     It is allowed, but discouraged, to open a LLM-created PR with `r? @ghost` before finding a reviewer;
-     we suggest instead pushing to your fork and posting a link on Zulip for your prospective reviewer.
-     Such PRs still require disclosure.
-2. "Non-critical" means that it is extremely unlikely for the PR to cause a [soundness](https://jacko.io/safety_and_soundness.html) regression.
+2. "Non-critical" means that it is extremely unlikely for the PR to cause a regression.
    - ℹ️ Examples:
-     - Changes to internal tooling like `tidy`, `x setup`, and `linkchecker` are probably ok.
-     - Changes that have a strong soundness impact, like the trait system, MIR building, or the query system are probably not ok.
+     - Trivial changes to comments and tests are probably ok.
+     - Changes that have a strong impact, like the traits, hardware implementation, or the plumbing system are probably not ok.
 3. "High-quality" means that it is held to at least the same standard as other code changes.
    Everyone reads code, not just the author and reviewer;
    we are not interested in "vibe-coded" PRs that degrade the quality of the codebase.
@@ -161,17 +142,8 @@ Pre-arranged, non-critical, high-quality, well-tested, and well-reviewed code ch
    - ℹ️ If there is no existing test suite for a section of code, you must either write a new test suite or close the PR.
      There are no exceptions for "writing the tests seems hard".
 5. "Well-reviewed" means the author and reviewer both commit to fully understanding the code.
-   - ℹ️ All review requirements in [our existing review policy](../compiler/reviews.md#basic-reviewing-requirements) still apply.
    - ℹ️ A review from a project member does not substitute for self-review.
      Authors are expected to review their own code before posting and after each change.
-   - 💡 See the [dev-guide][llm-guidance] for additional suggestions.
-
-As an exception, members of the `rust-lang` organization are not bound by the "non-critical" clause;
-we trust authors and reviewers to make their own judgements.
-However, we _strongly discourage_ making use of this provision.
-LLMs are very very good at generating plausible-looking code, and soundness is hard to test.
-
-As an exception, PRs written before this policy went into effect are exempt from the "non-critical" clause.
 
 ### Procedures
 
