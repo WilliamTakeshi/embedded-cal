@@ -13,9 +13,9 @@ use super::*;
 /// It implements all the individual traits, as well as the full `Cal` trait. The former is useful
 /// for hardware implementations that don't touch an area at all; the latter is useful in testing
 /// or when an extender is used standalone.
-pub struct EmptyCal<const PLUMBING: bool>;
+pub struct EmptyCal;
 
-impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
+impl Cal for EmptyCal {
     type DhProvider = Self;
     type AeadProvider = Self;
     type HashProvider = Self;
@@ -42,7 +42,7 @@ impl<const PLUMBING: bool> Cal for EmptyCal<PLUMBING> {
 // resolved; then again, the implementations that do make it short will live here. Until then, feel
 // free to copy those out into your Cal implementations.
 
-impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
+impl HashProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type State = NoAlgorithms;
     type Output = NoAlgorithms;
@@ -60,7 +60,7 @@ impl<const PLUMBING: bool> HashProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
+impl HmacProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
     type State = NoAlgorithms;
@@ -83,7 +83,7 @@ impl<const PLUMBING: bool> HmacProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
+impl AeadProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type Key = NoAlgorithms;
     type Tag = NoAlgorithms;
@@ -114,7 +114,7 @@ impl<const PLUMBING: bool> AeadProvider for EmptyCal<PLUMBING> {
     }
 }
 
-impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
+impl DhProvider for EmptyCal {
     type Algorithm = NoAlgorithms;
     type VisibleSecretKey = NoAlgorithms;
     type SecretKey = NoAlgorithms;
@@ -141,7 +141,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn raw_secret_bytes<'s>(
         &mut self,
         secret: &'s Self::SharedSecret,
-    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'s> {
         match *secret {};
         &[]
     }
@@ -150,7 +150,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn export_secretkey_bytes<'s>(
         &mut self,
         secretkey: &'s Self::VisibleSecretKey,
-    ) -> impl AsRef<[u8]> + use<'s, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'s> {
         match *secretkey {};
         &[]
     }
@@ -159,7 +159,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         &mut self,
         alg: Self::Algorithm,
         _secret: &[u8],
-    ) -> Result<Self::VisibleSecretKey, dh::ImportError> {
+    ) -> Result<Self::VisibleSecretKey, crate::ImportError> {
         match alg {}
     }
 
@@ -167,7 +167,7 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
     fn export_publickey_bytes<'p>(
         &mut self,
         public: &'p Self::PublicKey,
-    ) -> impl AsRef<[u8]> + use<'p, PLUMBING> {
+    ) -> impl AsRef<[u8]> + use<'p> {
         match *public {};
         &[]
     }
@@ -175,16 +175,16 @@ impl<const PLUMBING: bool> DhProvider for EmptyCal<PLUMBING> {
         &mut self,
         alg: Self::Algorithm,
         _data: &[u8],
-    ) -> Result<Self::PublicKey, dh::ImportError> {
+    ) -> Result<Self::PublicKey, crate::ImportError> {
         match alg {}
     }
 }
 
-impl plumbing::Plumbing for EmptyCal<true> {}
+impl plumbing::Plumbing for EmptyCal {}
 
-impl plumbing::hash::Hash for EmptyCal<true> {}
+impl plumbing::hash::Hash for EmptyCal {}
 
-impl plumbing::hash::Sha2Short for EmptyCal<true> {
+impl plumbing::hash::Sha2Short for EmptyCal {
     const SUPPORTED: bool = false;
     const SEND_PADDING: bool = false;
     const FIRST_CHUNK_SIZE: usize = 0;
@@ -202,6 +202,60 @@ impl plumbing::hash::Sha2Short for EmptyCal<true> {
 
     fn finalize(&mut self, instance: Self::State, _last_chunk: &[u8], _target: &mut [u8]) {
         match instance {}
+    }
+}
+
+impl plumbing::ec::Ec for EmptyCal {
+    const MAX_SCALAR_LENGTH: usize = 0;
+
+    type PrimitivesP256 = Self;
+    type PrimitivesX25519 = Self;
+    type PrimitivesX448 = Self;
+
+    fn p256(&mut self) -> &mut Self::PrimitivesP256 {
+        self
+    }
+    fn x25519(&mut self) -> &mut Self::PrimitivesX25519 {
+        self
+    }
+    fn x448(&mut self) -> &mut Self::PrimitivesX448 {
+        self
+    }
+}
+
+impl<C: plumbing::ec::Curve> plumbing::ec::EcPrimitives<C> for EmptyCal {
+    const HAS_MULTIPLY_SCALAR_POINT: bool = false;
+
+    type Scalar = NoAlgorithms;
+    type Point = NoAlgorithms;
+
+    fn multiply_scalar_point(&mut self, a: &Self::Scalar, _b: &Self::Point) -> Self::Point {
+        match *a {}
+    }
+
+    fn point(&mut self, x: Self::Scalar, _y: Self::Scalar) -> Self::Point {
+        match x {}
+    }
+
+    fn import_scalar_bytes(&mut self, _scalar: &[u8]) -> Result<Self::Scalar, crate::ImportError> {
+        Err(crate::ImportError)
+    }
+
+    fn export_scalar_bytes<'s>(
+        &mut self,
+        _scalar: &'s Self::Scalar,
+    ) -> impl AsRef<[u8]> + use<'s, C> {
+        // Actually never returns because it can not be entered due to *scalar being uninhabited,
+        // but we'll have to give a type nonetheless.
+        &[]
+    }
+
+    fn x_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        match *point {}
+    }
+
+    fn y_coord(&mut self, point: &Self::Point) -> Self::Scalar {
+        match *point {}
     }
 }
 

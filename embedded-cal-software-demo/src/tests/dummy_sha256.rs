@@ -13,7 +13,7 @@ use embedded_cal::empty::EmptyCal;
 /// A minimal testable version of SHA256-but-no-blocks-or-dummy.
 ///
 /// All implementation follows the Wikipedia pseudocode.
-pub struct DummySha256(EmptyCal<false>);
+pub struct DummySha256(EmptyCal);
 
 impl DummySha256 {
     pub fn new() -> Self {
@@ -33,10 +33,10 @@ const k: [u32; 64] = [
 ];
 
 impl embedded_cal::Cal for DummySha256 {
-    type DhProvider = EmptyCal<false>;
-    type AeadProvider = EmptyCal<false>;
-    type HashProvider = EmptyCal<false>;
-    type HmacProvider = EmptyCal<false>;
+    type DhProvider = EmptyCal;
+    type AeadProvider = EmptyCal;
+    type HashProvider = EmptyCal;
+    type HmacProvider = EmptyCal;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         &mut self.0
@@ -137,5 +137,25 @@ impl embedded_cal::plumbing::hash::Sha2Short for DummySha256 {
         for (i, word) in instance.into_iter().enumerate() {
             target[4 * i..][..4].copy_from_slice(&word.to_be_bytes());
         }
+    }
+}
+
+impl embedded_cal::plumbing::ec::Ec for DummySha256 {
+    const MAX_SCALAR_LENGTH: usize = 0;
+
+    type PrimitivesP256 = EmptyCal;
+    type PrimitivesX25519 = EmptyCal;
+    type PrimitivesX448 = EmptyCal;
+
+    fn p256(&mut self) -> &mut Self::PrimitivesP256 {
+        &mut self.0
+    }
+
+    fn x25519(&mut self) -> &mut Self::PrimitivesX25519 {
+        &mut self.0
+    }
+
+    fn x448(&mut self) -> &mut Self::PrimitivesX448 {
+        &mut self.0
     }
 }

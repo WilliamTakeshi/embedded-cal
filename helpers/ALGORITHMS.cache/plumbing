@@ -3,4 +3,4 @@
 ./embedded-cal-rustcrypto/src/lib.rs:        fn f(_cal: impl embedded_cal::plumbing::Plumbing) {}
 ./embedded-cal-software-demo/src/tests/dummy_sha256.rs:impl embedded_cal::plumbing::Plumbing for DummySha256 {}
 ./embedded-cal-stm32wba55/src/lib.rs:impl embedded_cal::plumbing::Plumbing for Stm32wba55Cal {}
-./embedded-cal/src/empty.rs:impl plumbing::Plumbing for EmptyCal<true> {}
+./embedded-cal/src/empty.rs:impl plumbing::Plumbing for EmptyCal {}

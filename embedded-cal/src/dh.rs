@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
+use crate::ImportError;
+
 /// Diffie-Hellman style key establishment.
 ///
 /// This trait does not distinguish between prime factor DH and Elliptic Curve DH (ECDH); it
@@ -130,19 +132,6 @@ impl core::fmt::Display for IncompatibleKeys {
 }
 
 impl core::error::Error for IncompatibleKeys {}
-
-/// Error indicating that a imported key's size does not match the given algorithm, or that the data
-/// was otherwise found flawed.
-#[derive(Debug)]
-pub struct ImportError;
-
-impl core::fmt::Display for ImportError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("data not valid for algorithm")
-    }
-}
-
-impl core::error::Error for ImportError {}
 
 /// An algorithm for diffie-hellman style key establishment.
 ///
