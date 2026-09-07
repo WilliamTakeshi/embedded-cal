@@ -107,6 +107,28 @@ impl<Base: embedded_cal::Cal + embedded_cal::plumbing::hash::Hash>
 {
 }
 
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::ec::Ec> embedded_cal::plumbing::ec::Ec
+    for RustcryptoCalExtender<Base>
+{
+    const MAX_SCALAR_LENGTH: usize = Base::MAX_SCALAR_LENGTH;
+
+    type PrimitivesP256 = Base::PrimitivesP256;
+    type PrimitivesX25519 = Base::PrimitivesX25519;
+    type PrimitivesX448 = Base::PrimitivesX448;
+
+    fn p256(&mut self) -> &mut Self::PrimitivesP256 {
+        self.base.p256()
+    }
+
+    fn x25519(&mut self) -> &mut Self::PrimitivesX25519 {
+        self.base.x25519()
+    }
+
+    fn x448(&mut self) -> &mut Self::PrimitivesX448 {
+        self.base.x448()
+    }
+}
+
 impl<Base: embedded_cal::Cal + embedded_cal::plumbing::Plumbing> embedded_cal::plumbing::Plumbing
     for RustcryptoCalExtender<Base>
 {
@@ -182,7 +204,7 @@ mod tests {
     fn test_plumbing_passon() {
         fn f(_cal: impl embedded_cal::plumbing::Plumbing) {}
         f(RustcryptoCalExtender::new_extending(
-            embedded_cal::empty::EmptyCal::<true>,
+            embedded_cal::empty::EmptyCal,
         ))
     }
 }
