@@ -85,7 +85,7 @@ unsafe fn pke_ram_word(addr: u32) -> Reg<u32, RW> {
 /// (`CRACEN_PKE_RAM_BASE..CRACEN_PKE_RAM_END`).
 unsafe fn write_pke_le(addr: u32, data: &[u8]) {
     debug_assert!(addr.is_multiple_of(4), "function expects word sized data");
-    for (i, chunk) in data.chunks_exact(4).enumerate() {
+    for (i, chunk) in data.as_chunks::<4>().0.iter().enumerate() {
         let v = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         unsafe { pke_ram_word(addr + i as u32 * 4).write_value(v) };
     }
@@ -95,8 +95,8 @@ unsafe fn write_pke_le(addr: u32, data: &[u8]) {
 /// `addr` must be a word-aligned address within PKE RAM
 /// (`CRACEN_PKE_RAM_BASE..CRACEN_PKE_RAM_END`).
 unsafe fn read_pke_le(addr: u32, out: &mut [u8]) {
-    for (i, chunk) in out.chunks_exact_mut(4).enumerate() {
-        chunk.copy_from_slice(&unsafe { pke_ram_word(addr + i as u32 * 4).read() }.to_le_bytes());
+    for (i, chunk) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        *chunk = unsafe { pke_ram_word(addr + i as u32 * 4).read() }.to_le_bytes();
     }
 }
 

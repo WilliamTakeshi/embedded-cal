@@ -265,10 +265,8 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
                 while self.hash.cr().read().init() {}
 
                 // Feed the inner key (64 bytes = 16 full 32-bit words).
-                for chunk in key_block.chunks_exact(WORD_SIZE) {
-                    let mut bytes = [0u8; WORD_SIZE];
-                    bytes.copy_from_slice(chunk);
-                    self.hash.din().write_value(u32::from_be_bytes(bytes));
+                for chunk in key_block.as_chunks::<WORD_SIZE>().0 {
+                    self.hash.din().write_value(u32::from_be_bytes(*chunk));
                 }
                 // NBLW = 0: all 16 words are full (no partial last word).
                 self.hash.str().write(|w| w.set_nblw(0));
@@ -312,10 +310,8 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
                     wrote_blocks = true;
                 }
                 // Write a complete 64-byte block (16 words) to the hardware.
-                for chunk in state.buf[..state.buf_len].chunks_exact(WORD_SIZE) {
-                    let mut bytes = [0u8; WORD_SIZE];
-                    bytes.copy_from_slice(chunk);
-                    self.hash.din().write_value(u32::from_be_bytes(bytes));
+                for chunk in state.buf[..state.buf_len].as_chunks::<WORD_SIZE>().0 {
+                    self.hash.din().write_value(u32::from_be_bytes(*chunk));
                 }
                 state.buf_len = 0;
             }
@@ -347,10 +343,8 @@ impl embedded_cal::HmacProvider for Stm32wba55Cal {
         while !self.hash.sr().read().dinis() {}
 
         // Feed the outer key (same 64-byte block as the inner key).
-        for chunk in state.key_block.chunks_exact(WORD_SIZE) {
-            let mut bytes = [0u8; WORD_SIZE];
-            bytes.copy_from_slice(chunk);
-            self.hash.din().write_value(u32::from_be_bytes(bytes));
+        for chunk in state.key_block.as_chunks::<WORD_SIZE>().0 {
+            self.hash.din().write_value(u32::from_be_bytes(*chunk));
         }
         // NBLW = 0: all 16 words of the outer key are full.
         self.hash.str().write(|w| w.set_nblw(0));
@@ -400,10 +394,8 @@ impl embedded_cal::plumbing::hash::Sha2Short for Stm32wba55Cal {
 
         // Hardware can only pause hashing after exactly NBWE (Number of words expected) words have been written.
         // For SHA-256 this corresponds to 17 words for the first block, and 16 words for all subsequent blocks.
-        for chunk in data.chunks_exact(WORD_SIZE) {
-            let mut bytes = [0u8; WORD_SIZE];
-            bytes.copy_from_slice(chunk);
-            let word = u32::from_be_bytes(bytes);
+        for chunk in data.as_chunks::<WORD_SIZE>().0 {
+            let word = u32::from_be_bytes(*chunk);
 
             self.hash.din().write_value(word);
         }

@@ -4,6 +4,7 @@
 mod aead;
 mod dh;
 mod hash;
+mod hmac;
 mod rng;
 
 use digest::Digest;
@@ -62,7 +63,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
     type DhProvider = Self;
     type AeadProvider = Self;
     type HashProvider = Self;
-    type HmacProvider = HmacProviderOf<Base>;
+    type HmacProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -74,7 +75,7 @@ impl<Base: embedded_cal::Cal> embedded_cal::Cal for RustcryptoCalExtender<Base> 
         self
     }
     fn hmac(&mut self) -> &mut Self::HmacProvider {
-        self.base.hmac()
+        self
     }
 }
 
@@ -106,6 +107,28 @@ impl<Base: embedded_cal::Cal + embedded_cal::plumbing::hash::Hash>
 {
 }
 
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::ec::Ec> embedded_cal::plumbing::ec::Ec
+    for RustcryptoCalExtender<Base>
+{
+    const MAX_SCALAR_LENGTH: usize = Base::MAX_SCALAR_LENGTH;
+
+    type PrimitivesP256 = Base::PrimitivesP256;
+    type PrimitivesX25519 = Base::PrimitivesX25519;
+    type PrimitivesX448 = Base::PrimitivesX448;
+
+    fn p256(&mut self) -> &mut Self::PrimitivesP256 {
+        self.base.p256()
+    }
+
+    fn x25519(&mut self) -> &mut Self::PrimitivesX25519 {
+        self.base.x25519()
+    }
+
+    fn x448(&mut self) -> &mut Self::PrimitivesX448 {
+        self.base.x448()
+    }
+}
+
 impl<Base: embedded_cal::Cal + embedded_cal::plumbing::Plumbing> embedded_cal::plumbing::Plumbing
     for RustcryptoCalExtender<Base>
 {
@@ -121,6 +144,21 @@ mod tests {
 
         embedded_cal::test_hash_algorithm_sha256::<HashAlgorithmOf<RustcryptoCal>>();
         testvectors::test_hash_algorithm_sha256(&mut cal);
+    }
+
+    #[test]
+    fn test_hmac_sha256() {
+        let mut cal = RustcryptoCal::new();
+
+        embedded_cal::test_hmac_algorithm_hmacsha256::<HmacAlgorithmOf<RustcryptoCal>>();
+        testvectors::test_hmac_sha256(&mut cal);
+    }
+
+    #[test]
+    fn test_hkdf_sha256() {
+        let mut cal = RustcryptoCal::new();
+
+        testvectors::test_hkdf_sha256(&mut cal);
     }
 
     #[test]
@@ -166,7 +204,7 @@ mod tests {
     fn test_plumbing_passon() {
         fn f(_cal: impl embedded_cal::plumbing::Plumbing) {}
         f(RustcryptoCalExtender::new_extending(
-            embedded_cal::empty::EmptyCal::<true>,
+            embedded_cal::empty::EmptyCal,
         ))
     }
 }
