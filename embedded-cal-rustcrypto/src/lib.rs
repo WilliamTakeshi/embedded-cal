@@ -3,9 +3,12 @@
 
 mod aead;
 mod dh;
+mod ec_plumbing;
 mod hash;
 mod hmac;
 mod rng;
+
+pub use ec_plumbing::RustcryptoEc;
 
 use digest::Digest;
 use embedded_cal::{accessor::*, empty};
@@ -190,6 +193,28 @@ mod tests {
 
         for vec in testvectors::dh::RFC5903_P256 {
             vec.test_with(&mut cal);
+        }
+    }
+
+    /// Exercises the EC plumbing layer directly, as the hardware back-ends' integration tests do.
+    ///
+    /// This runs the same test vector code they run, so a failure here means the shared runner is
+    /// broken rather than a back-end.
+    #[test]
+    fn test_ec_plumbing() {
+        let mut ec = RustcryptoEc::new();
+
+        for vec in testvectors::dh::RFC5903_P256 {
+            vec.test_plumbing_p256(&mut ec);
+        }
+
+        for vec in testvectors::dh::RFC7748_X25519 {
+            vec.test_plumbing_x25519(&mut ec);
+        }
+
+        // X448 is not implemented by this back-end; the runner detects that and does nothing.
+        for vec in testvectors::dh::RFC7748_X448 {
+            vec.test_plumbing_x448(&mut ec);
         }
     }
 
