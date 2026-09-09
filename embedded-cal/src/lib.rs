@@ -4,6 +4,7 @@
 
 pub mod empty;
 pub mod p256;
+pub mod rfc7748;
 pub mod util;
 
 mod aead;
