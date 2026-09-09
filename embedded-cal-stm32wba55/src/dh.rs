@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: Inria-AIO, Cryspen, and Christian Amsüss
 
+use crate::dh_plumbing::{StmPoint, StmScalar};
 use embedded_cal::p256::{
-    B, P, P256_GX, P256_GY, P256_ORDER, bytes_to_words, ge, p256_recover_y, words_to_bytes,
+    B, P, P256_GX_BYTES, P256_GY_BYTES, P256_ORDER, bytes_to_words, ge, p256_recover_y,
 };
+use embedded_cal::plumbing::ec::{Ec, EcPrimitives};
 use rand_core::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -31,7 +33,9 @@ const RAM_K: usize = 936;
 const RAM_RESULT_Y: usize = 116;
 
 const PKA_MODE_ECC_MULT: u8 = 0b10_0000;
-const PKA_RAM_WORDS: usize = 667;
+// Full extent of the PKA RAM. This has to cover every slot the operation touches, in particular
+// RAM_K at 936 where the private scalar goes -- a smaller bound leaves the scalar in RAM.
+const PKA_RAM_WORDS: usize = 1334;
 
 #[derive(PartialEq, Eq, Debug, Clone, Zeroize)]
 pub enum DhAlgorithm {
@@ -56,7 +60,7 @@ impl embedded_cal::DhAlgorithm for DhAlgorithm {
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey {
     alg: DhAlgorithm,
-    scalar: [u8; 32],
+    scalar: StmScalar,
 }
 
 #[derive(Zeroize)]
@@ -70,8 +74,7 @@ impl From<VisibleSecretKey> for SecretKey {
 
 pub struct PublicKey {
     alg: DhAlgorithm,
-    x: [u8; 32],
-    y: [u8; 32],
+    point: StmPoint,
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
@@ -176,6 +179,10 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
                 self.fill_bytes(&mut scalar);
                 let w = bytes_to_words(&scalar);
                 if w != [0u32; 8] && !ge(&w, &P256_ORDER) {
+                    let scalar = self
+                        .p256()
+                        .import_scalar_bytes(&scalar)
+                        .expect("32 bytes is the P-256 scalar length");
                     return VisibleSecretKey(SecretKey { alg, scalar });
                 }
             },
@@ -186,7 +193,13 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         &mut self,
         secretkey: &'s Self::VisibleSecretKey,
     ) -> impl AsRef<[u8]> + use<'s> {
-        &secretkey.0.scalar
+        // Owned rather than borrowed: the plumbing's scalars are not stored in the exported byte
+        // order, so there is nothing to hand out a reference to.
+        to_array(
+            self.p256()
+                .export_scalar_bytes(&secretkey.0.scalar)
+                .as_ref(),
+        )
     }
 
     fn import_secretkey_bytes(
@@ -194,7 +207,7 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         alg: Self::Algorithm,
         secret: &[u8],
     ) -> Result<Self::VisibleSecretKey, embedded_cal::ImportError> {
-        let scalar: [u8; 32] = secret.try_into().map_err(|_| embedded_cal::ImportError)?;
+        let scalar = self.p256().import_scalar_bytes(secret)?;
         Ok(VisibleSecretKey(SecretKey { alg, scalar }))
     }
 
@@ -202,7 +215,8 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         &mut self,
         public: &'p Self::PublicKey,
     ) -> impl AsRef<[u8]> + use<'p> {
-        &public.x
+        let x = self.p256().x_coord(&public.point);
+        to_array(self.p256().export_scalar_bytes(&x).as_ref())
     }
 
     fn import_publickey_bytes(
@@ -210,9 +224,12 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         alg: Self::Algorithm,
         data: &[u8],
     ) -> Result<Self::PublicKey, embedded_cal::ImportError> {
-        let x: [u8; 32] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
-        let y = p256_recover_y(&x)?;
-        Ok(PublicKey { alg, x, y })
+        let x: &[u8; 32] = data.try_into().map_err(|_| embedded_cal::ImportError)?;
+        let y = p256_recover_y(x)?;
+        let x = self.p256().import_scalar_bytes(x)?;
+        let y = self.p256().import_scalar_bytes(&y)?;
+        let point = self.p256().point(x, y);
+        Ok(PublicKey { alg, point })
     }
 
     fn shared_secret(
@@ -223,24 +240,17 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
         if private.alg != public.alg {
             return Err(embedded_cal::IncompatibleKeys);
         }
-        let mut scalar_words = bytes_to_words(&private.scalar);
-        let (result_x, _) = self.pka_ecc_mult(
-            &scalar_words,
-            &bytes_to_words(&public.x),
-            &bytes_to_words(&public.y),
-        );
-        scalar_words.zeroize();
-        Ok(SharedSecret(words_to_bytes(&result_x)))
+        let result = self
+            .p256()
+            .multiply_scalar_point(&private.scalar, &public.point);
+        Ok(SharedSecret(self.x_coord_bytes(&result)))
     }
 
     fn public_key(&mut self, private: &Self::SecretKey) -> Self::PublicKey {
-        let mut scalar_words = bytes_to_words(&private.scalar);
-        let (result_x, result_y) = self.pka_ecc_mult(&scalar_words, &P256_GX, &P256_GY);
-        scalar_words.zeroize();
+        let base = self.base_point();
         PublicKey {
             alg: private.alg.clone(),
-            x: words_to_bytes(&result_x),
-            y: words_to_bytes(&result_y),
+            point: self.p256().multiply_scalar_point(&private.scalar, &base),
         }
     }
 
@@ -250,4 +260,33 @@ impl embedded_cal::DhProvider for super::Stm32wba55Cal {
     ) -> impl AsRef<[u8]> + use<'s> {
         &secret.0
     }
+}
+
+impl super::Stm32wba55Cal {
+    /// Builds the P-256 generator as a plumbing point.
+    fn base_point(&mut self) -> StmPoint {
+        let x = self
+            .p256()
+            .import_scalar_bytes(&P256_GX_BYTES)
+            .expect("generator x is a valid scalar");
+        let y = self
+            .p256()
+            .import_scalar_bytes(&P256_GY_BYTES)
+            .expect("generator y is a valid scalar");
+        self.p256().point(x, y)
+    }
+
+    /// Extracts a point's x coordinate into owned bytes.
+    fn x_coord_bytes(&mut self, point: &StmPoint) -> [u8; 32] {
+        let x = self.p256().x_coord(point);
+        to_array(self.p256().export_scalar_bytes(&x).as_ref())
+    }
+}
+
+/// Copies an exported scalar into an owned array.
+///
+/// Exports are handed out as slices, but the `DhProvider` return types have to outlive the
+/// borrow of the CAL, so the bytes are copied out.
+fn to_array(bytes: &[u8]) -> [u8; 32] {
+    bytes.try_into().expect("P-256 scalars are 32 bytes")
 }

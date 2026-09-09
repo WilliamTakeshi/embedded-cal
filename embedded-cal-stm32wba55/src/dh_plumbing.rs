@@ -3,6 +3,7 @@
 
 use super::*;
 use embedded_cal::plumbing::ec::*;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 impl Ec for Stm32wba55Cal {
     const MAX_SCALAR_LENGTH: usize = 32;
@@ -62,8 +63,13 @@ impl EcPrimitives<P256> for Stm32wba55Cal {
     }
 }
 
-#[derive(Clone)]
+/// A 256-bit value in the PKA's little-endian word order.
+///
+/// This stands in both for scalars proper and for point coordinates.
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct StmScalar([u32; 8]);
+
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct StmPoint {
     x: StmScalar,
     y: StmScalar,
