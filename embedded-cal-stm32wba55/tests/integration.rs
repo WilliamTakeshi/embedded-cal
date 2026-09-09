@@ -80,4 +80,29 @@ mod tests {
             v.test_with(state.cal.dh());
         }
     }
+
+    // The tests below drive `EcPrimitives` directly rather than through `DhProvider`. The X25519
+    // and X448 ones do nothing here, as the PKA has no Montgomery ladder and those curves are
+    // parked on `EmptyCal`; they are kept so both back-ends run the same list.
+
+    #[test]
+    fn test_ec_plumbing_p256(state: &mut super::TestState) {
+        for v in testvectors::dh::RFC5903_P256 {
+            v.test_plumbing_p256(&mut state.cal);
+        }
+    }
+
+    #[test]
+    fn test_ec_plumbing_x25519(state: &mut super::TestState) {
+        for v in testvectors::dh::RFC7748_X25519 {
+            v.test_plumbing_x25519(&mut state.cal);
+        }
+    }
+
+    #[test]
+    fn test_ec_plumbing_x448(state: &mut super::TestState) {
+        for v in testvectors::dh::RFC7748_X448 {
+            v.test_plumbing_x448(&mut state.cal);
+        }
+    }
 }
