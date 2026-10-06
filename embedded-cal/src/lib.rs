@@ -130,6 +130,7 @@ mod error;
 mod hash;
 mod hkdf;
 mod hmac;
+mod sign;
 // FIXME: Once we start API stability, this should be a dedicated crate.
 pub mod plumbing;
 
