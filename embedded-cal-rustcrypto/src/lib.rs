@@ -6,6 +6,7 @@ mod dh;
 mod hash;
 mod hmac;
 mod rng;
+mod sign;
 
 #[cfg(any(feature = "standalone", test))]
 mod standalone;
@@ -59,7 +60,7 @@ where
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = Self;
-    type SignProvider = SignProviderOf<Base>;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -74,7 +75,7 @@ where
         self
     }
     fn sign(&mut self) -> &mut Self::SignProvider {
-        self.base.sign()
+        self
     }
 }
 
