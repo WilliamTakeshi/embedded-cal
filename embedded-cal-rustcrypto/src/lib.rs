@@ -59,6 +59,7 @@ where
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = Self;
+    type SignProvider = SignProviderOf<Base>;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -71,6 +72,9 @@ where
     }
     fn hmac(&mut self) -> &mut Self::HmacProvider {
         self
+    }
+    fn sign(&mut self) -> &mut Self::SignProvider {
+        self.base.sign()
     }
 }
 
