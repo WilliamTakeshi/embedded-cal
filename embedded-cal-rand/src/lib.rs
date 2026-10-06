@@ -56,6 +56,8 @@ impl<C: Cal, R> Cal for WithRng<C, R> {
 
     type HmacProvider = C::HmacProvider;
 
+    type SignProvider = C::SignProvider;
+
     fn dh(&mut self) -> &mut Self::DhProvider {
         self.cal.dh()
     }
@@ -70,6 +72,10 @@ impl<C: Cal, R> Cal for WithRng<C, R> {
 
     fn hmac(&mut self) -> &mut Self::HmacProvider {
         self.cal.hmac()
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
+        self.cal.sign()
     }
 }
 
@@ -118,6 +124,31 @@ impl<C: Ec, R> Ec for WithRng<C, R> {
 
     fn x448(&mut self) -> &mut Self::PrimitivesX448 {
         self.cal.x448()
+    }
+}
+
+impl<C: embedded_cal::plumbing::ecdsa::Ecdsa, R> embedded_cal::plumbing::ecdsa::Ecdsa
+    for WithRng<C, R>
+{
+    const SUPPORTED: bool = C::SUPPORTED;
+
+    fn ecdsa_p256_generate(&mut self) -> [u8; 32] {
+        self.cal.ecdsa_p256_generate()
+    }
+
+    fn ecdsa_p256_sign(&mut self, d: &[u8; 32], h: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
+        self.cal.ecdsa_p256_sign(d, h)
+    }
+
+    fn ecdsa_p256_verify(
+        &mut self,
+        qx: &[u8; 32],
+        qy: &[u8; 32],
+        h: &[u8; 32],
+        r: &[u8; 32],
+        s: &[u8; 32],
+    ) -> Result<(), embedded_cal::SignatureInvalid> {
+        self.cal.ecdsa_p256_verify(qx, qy, h, r, s)
     }
 }
 
