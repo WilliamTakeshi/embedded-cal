@@ -209,4 +209,13 @@ mod tests {
             embedded_cal::empty::EmptyCal,
         ))
     }
+
+    #[test]
+    fn test_ecdsa_p256() {
+        let mut cal = Standalone::standalone();
+
+        for vec in testvectors::sign::ECDSA_P256 {
+            vec.test_with(&mut cal);
+        }
+    }
 }
