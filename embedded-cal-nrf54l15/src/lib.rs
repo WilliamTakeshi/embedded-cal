@@ -6,6 +6,7 @@ mod aead;
 mod descriptor;
 mod dh;
 mod dh_plumbing;
+mod ecdsa_plumbing;
 mod microcode;
 mod try_rng;
 
@@ -32,6 +33,7 @@ impl embedded_cal::Cal for Nrf54l15Cal {
     type AeadProvider = Self;
     type HashProvider = EmptyCal;
     type HmacProvider = EmptyCal;
+    type SignProvider = EmptyCal;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -46,6 +48,10 @@ impl embedded_cal::Cal for Nrf54l15Cal {
     }
 
     fn hmac(&mut self) -> &mut Self::HmacProvider {
+        &mut self.empty
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
         &mut self.empty
     }
 }

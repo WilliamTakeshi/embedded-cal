@@ -6,6 +6,7 @@ mod dh;
 mod hash;
 mod hmac;
 mod rng;
+mod sign;
 
 #[cfg(any(feature = "standalone", test))]
 mod standalone;
@@ -59,6 +60,7 @@ where
     type AeadProvider = Self;
     type HashProvider = Self;
     type HmacProvider = Self;
+    type SignProvider = Self;
 
     fn dh(&mut self) -> &mut Self::DhProvider {
         self
@@ -70,6 +72,9 @@ where
         self
     }
     fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self
+    }
+    fn sign(&mut self) -> &mut Self::SignProvider {
         self
     }
 }
@@ -121,6 +126,31 @@ impl<Base: embedded_cal::Cal + embedded_cal::plumbing::ec::Ec> embedded_cal::plu
 
     fn x448(&mut self) -> &mut Self::PrimitivesX448 {
         self.base.x448()
+    }
+}
+
+impl<Base: embedded_cal::Cal + embedded_cal::plumbing::ecdsa::Ecdsa>
+    embedded_cal::plumbing::ecdsa::Ecdsa for RustcryptoCalExtender<Base>
+{
+    const SUPPORTED: bool = Base::SUPPORTED;
+
+    fn ecdsa_p256_generate(&mut self) -> [u8; 32] {
+        self.base.ecdsa_p256_generate()
+    }
+
+    fn ecdsa_p256_sign(&mut self, d: &[u8; 32], h: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
+        self.base.ecdsa_p256_sign(d, h)
+    }
+
+    fn ecdsa_p256_verify(
+        &mut self,
+        qx: &[u8; 32],
+        qy: &[u8; 32],
+        h: &[u8; 32],
+        r: &[u8; 32],
+        s: &[u8; 32],
+    ) -> Result<(), embedded_cal::SignatureInvalid> {
+        self.base.ecdsa_p256_verify(qx, qy, h, r, s)
     }
 }
 
@@ -203,5 +233,14 @@ mod tests {
         f(RustcryptoCalExtender::new_extending(
             embedded_cal::empty::EmptyCal,
         ))
+    }
+
+    #[test]
+    fn test_ecdsa_p256() {
+        let mut cal = Standalone::standalone();
+
+        for vec in testvectors::sign::ECDSA_P256 {
+            vec.test_with(&mut cal);
+        }
     }
 }
